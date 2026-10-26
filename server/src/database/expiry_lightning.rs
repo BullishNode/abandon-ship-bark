@@ -107,7 +107,7 @@ impl Tx<'_> {
 
 	/// Keep a complete existing source scope, without inferring from hash siblings.
 	pub(crate) async fn lightning_payment_outcome(
-		&self, hash: PaymentHash, source_ids: &[VtxoId], attempt_id: Option<i64>,
+		&self, hash: PaymentHash, source_ids: &[VtxoId],
 	) -> anyhow::Result<Option<LightningPaymentOutcome>> {
 		let mut requested = source_ids.to_vec();
 		requested.sort_unstable();
@@ -116,9 +116,9 @@ impl Tx<'_> {
 		let rows = self.query("SELECT a.id,a.status,l.vtxo_id FROM lightning_payment_attempt a \
 			JOIN lightning_payment_attempt_htlc_vtxo l ON l.lightning_payment_attempt_id=a.id \
 			JOIN vtxo v ON v.vtxo_id=l.vtxo_id JOIN htlc_vtxo h ON h.id=v.id \
-			WHERE a.payment_hash=$1 AND ($2::BIGINT IS NULL OR a.id=$2) \
+			WHERE a.payment_hash=$1 \
 			AND h.payment_hash=a.payment_hash AND h.direction='incoming' ORDER BY a.id,l.vtxo_id",
-			&[&hash.to_string(), &attempt_id]).await?;
+			&[&hash.to_string()]).await?;
 		let mut attempts = BTreeMap::<i64, (LightningPaymentStatus, Vec<VtxoId>)>::new();
 		for row in rows {
 			let entry = attempts.entry(row.get("id")).or_insert_with(|| (row.get("status"), Vec::new()));

@@ -554,7 +554,7 @@ async fn refresh_should_refresh_vtxos_no_dust() {
 	// The remaining coin may be refreshable or awaiting fallback reconciliation.
 	// The completed round input cannot become another pending principal.
 	let balance = bark2.offchain_balance().await;
-	if bark2.supports_awaiting_settlement().await {
+	if is_bark_version!(> "0.7.1") {
 		assert_eq!(balance.spendable, sat(200_000) - expected_fee, "{balance:?}");
 		assert_eq!(balance.awaiting_settlement + balance.needs_refresh, sat(331), "{balance:?}");
 		let wallet = bark2.client().await;
@@ -563,9 +563,7 @@ async fn refresh_should_refresh_vtxos_no_dust() {
 			"the old 200000-sat round input cannot return to the live coin set");
 		assert_eq!(wallet.balance().await.unwrap().total(), sat(200_331) - expected_fee,
 			"the 198000-sat replacement and 331-sat pending coin count exactly once");
-	} else if is_bark_version!(> "0.7.1") {
-		assert_eq!(balance.spendable, sat(200_000) - expected_fee, "{balance:?}");
-		assert_eq!(balance.needs_refresh, sat(331), "{balance:?}");
+
 	} else {
 		assert_eq!(balance.spendable, sat(200_331) - expected_fee, "{balance:?}");
 	}

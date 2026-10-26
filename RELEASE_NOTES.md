@@ -7,9 +7,11 @@ not establish qualification. Do not deploy this release on bitcoin mainnet.
 
 Use fresh server and client stores. This release requires mailbox-only v4
 registrations, signed recipient addresses and protocol 6 output proofs. There
-is no conversion or compatibility mode for earlier fork stores or addresses.
-Complete stores from this release can reopen without a reset of registrations
-or unpaid obligations. Preserve earlier stores and backups.
+is no conversion or compatibility mode for earlier fork stores or addresses,
+including the earlier mailbox-only v4 stores. Fallback tables use ordinary
+server migration 73 and wallet migration 43. Complete stores created by this
+release can reopen without a reset of registrations or unpaid obligations.
+Preserve earlier stores and backups.
 
 Use the release-pinned complete Core Lightning runtime,
 `v26.06.6-abandon6`, with its matching subdaemons and qualified plugin bytes.

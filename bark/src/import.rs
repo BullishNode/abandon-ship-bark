@@ -5,8 +5,9 @@
 //!
 //! The wallet owns a VTXO when it can derive the VTXO's user pubkey from its
 //! seed. That keypair also authorizes the query that asks the server whether
-//! the VTXO is spent. A Spent answer is followed by authenticated fallback
-//! history; pending payouts retain their signed material in quarantine.
+//! the VTXO is spent. A Spent answer is checked against signed ordinary
+//! spend evidence and actual on-chain payouts; unproven spends retain their
+//! signed material in quarantine.
 
 use anyhow::Context;
 use bitcoin::secp256k1::Keypair;

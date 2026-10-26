@@ -7,7 +7,6 @@ use std::str::FromStr;
 use anyhow::Context;
 use bitcoin::{Amount, OutPoint, Transaction, TxOut, Txid};
 use bitcoin_ext::{BlockHeight, TxOutExt};
-use chrono::{DateTime, Utc};
 use tokio_postgres::Row;
 
 use ark::{ProtocolDecodingError, ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoId};
@@ -22,25 +21,12 @@ pub struct BackingSnapshotLimits {
 	pub max_serialized_bytes: usize,
 }
 
-/// Availability of encoded genesis, not validity or physical containment.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SnapshotGenesis {
-	/// The row represents its own chain anchor; no intermediate path is needed.
-	Anchor,
-	/// An encoded path is available for the caller to validate against funding.
-	EncodedPath,
-	/// Bare intermediate metadata cannot prove which descendants it consumes.
-	MissingPath,
-}
-
 #[derive(Clone)]
 pub struct BackingVtxoFact {
 	pub state: VtxoState<Bare, ServerVtxoPolicy>,
 	/// Present only when the stored encoding supplies a complete path.
 	/// Availability still does not prove signatures or physical containment.
 	pub full_vtxo: Option<ServerVtxo<Full>>,
-	pub genesis: SnapshotGenesis,
-	pub frontier_at: Option<DateTime<Utc>>,
 	pub onchain_spent_height: Option<BlockHeight>,
 	pub onchain_spent_txid: Option<Txid>,
 	pub lightning_htlc_subscription_id: Option<i64>,
@@ -49,12 +35,11 @@ pub struct BackingVtxoFact {
 /// Complete known rows for the queried anchors, including spent and intermediate
 /// representations. A progressed backing's anchor lookup is only a superset:
 /// the caller must validate full genesis/path containment before treating
-/// any row as a financially covered leaf. MissingPath is never operator proof.
+/// any row as a financially covered leaf. A missing path is never operator proof.
 /// Committed expiry decisions take precedence in the ownership resolver.
 pub struct BackingSnapshot {
 	pub roots: Vec<ServerVtxo>,
 	pub regular: Vec<BackingVtxoFact>,
-	pub serialized_bytes: usize,
 }
 
 /// A caller-supplied transition anchor. Its exact output must be validated by
@@ -63,21 +48,6 @@ pub struct BackingSnapshot {
 pub struct BackingPartitionResidual {
 	pub outpoint: OutPoint,
 	pub txout: TxOut,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BackingRootPartition {
-	pub root: VtxoId,
-	pub terminals: Vec<VtxoId>,
-	pub terminal_amount: Amount,
-	pub anchor_residual_amount: Amount,
-}
-
-/// A complete geometric cut, not proof that the selected members are current
-/// economic terminals. No ownership, signature, chain or retirement decision.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BackingPartition {
-	pub roots: Vec<BackingRootPartition>,
 }
 
 impl BackingSnapshot {
@@ -127,7 +97,7 @@ impl BackingSnapshot {
 		funding: &[Transaction],
 		residuals: &[BackingPartitionResidual],
 		limits: BackingSnapshotLimits,
-	) -> anyhow::Result<BackingPartition> {
+	) -> anyhow::Result<()> {
 		ensure!(!self.roots.is_empty() && !terminals.is_empty(), "backing partition requires roots and terminals");
 		ensure!(limits.max_rows > 0 && limits.max_serialized_bytes > 0, "backing partition budgets must be positive");
 		let mut rows = self.roots.len().checked_add(terminals.len())
@@ -190,10 +160,10 @@ impl BackingSnapshot {
 		let mut used_terminals = BTreeSet::new();
 		let mut used_residuals = BTreeSet::new();
 		let mut used_transitions = BTreeSet::new();
-		let mut partitions = Vec::with_capacity(self.roots.len());
 		for root in &self.roots {
-			let mut partition = BackingRootPartition { root: root.id(), terminals: Vec::new(),
-				terminal_amount: Amount::ZERO, anchor_residual_amount: Amount::ZERO };
+			let mut terminal_amount = Amount::ZERO;
+			let mut anchor_residual_amount = Amount::ZERO;
+			let mut has_terminal = false;
 			let mut pending = vec![(root.point(), root.txout())];
 			while let Some((point, output)) = pending.pop() {
 				ensure!(visited.insert(point), "backing partition roots or branches overlap");
@@ -201,14 +171,14 @@ impl BackingSnapshot {
 					ensure!(!transitions.contains_key(&point), "backing partition has ancestor and descendant terminals");
 					ensure!(source.txout() == output, "backing partition terminal output differs from path");
 					used_terminals.insert(point);
-					partition.terminals.push(source.id());
-					partition.terminal_amount = partition.terminal_amount.checked_add(output.value)
+					has_terminal = true;
+					terminal_amount = terminal_amount.checked_add(output.value)
 						.context("backing partition terminal amount overflow")?;
 				} else if output.is_p2a_fee_anchor() {
 					ensure!(residual_map.get(&point).is_some_and(|supplied| **supplied == output),
 						"backing partition has a missing or mismatched P2A residual");
 					used_residuals.insert(point);
-					partition.anchor_residual_amount = partition.anchor_residual_amount.checked_add(output.value)
+					anchor_residual_amount = anchor_residual_amount.checked_add(output.value)
 						.context("backing partition anchor amount overflow")?;
 				} else {
 					let (prevout, tx) = transitions.get(&point).context("backing partition has an uncovered output")?;
@@ -224,17 +194,14 @@ impl BackingSnapshot {
 					}
 				}
 			}
-			ensure!(!partition.terminals.is_empty(), "backing partition has an unmapped root");
-			ensure!(partition.terminal_amount.checked_add(partition.anchor_residual_amount) == Some(root.amount()),
+			ensure!(has_terminal, "backing partition has an unmapped root");
+			ensure!(terminal_amount.checked_add(anchor_residual_amount) == Some(root.amount()),
 				"backing partition root amount is not conserved");
-			partition.terminals.sort();
-			partitions.push(partition);
 		}
 		ensure!(used_terminals.len() == supplied.len() && used_transitions.len() == transitions.len(),
 			"backing partition has extra terminals or transitions");
 		ensure!(used_residuals.len() == residual_map.len(), "backing partition has extra P2A residuals");
-		partitions.sort_by_key(|p| p.root);
-		Ok(BackingPartition { roots: partitions })
+		Ok(())
 	}
 
 }
@@ -248,20 +215,20 @@ WITH inventory AS (
 		oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
 		confirmed_height, spend_state::text AS spend_state, created_at, updated_at,
 		EXISTS(SELECT 1 FROM expiry_entitlement d WHERE d.vtxo_id=vtxo.vtxo_id) AS decided_for_fallback,
-		frontier_at, onchain_spent_height, onchain_spent_txid,
+		onchain_spent_height, onchain_spent_txid,
 		lightning_htlc_subscription_id, vtxo_txid, exit_delta, policy_type, policy, server_pubkey, amount
 	FROM vtxo WHERE anchor_point = ANY($1)
 ), bounded AS (
 	SELECT vtxo_id, anchor_point, id, vtxo, expiry,
 		oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
-		confirmed_height, spend_state, created_at, updated_at, decided_for_fallback, frontier_at,
+		confirmed_height, spend_state, created_at, updated_at, decided_for_fallback,
 		onchain_spent_height, onchain_spent_txid, lightning_htlc_subscription_id,
 		vtxo_txid, exit_delta, policy_type, policy, server_pubkey, amount
 	FROM inventory ORDER BY anchor_point, vtxo_id LIMIT $2
 ), sized AS (
 	SELECT vtxo_id, anchor_point, id, vtxo, expiry,
 		oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
-		confirmed_height, spend_state, created_at, updated_at, decided_for_fallback, frontier_at,
+		confirmed_height, spend_state, created_at, updated_at, decided_for_fallback,
 		onchain_spent_height, onchain_spent_txid, lightning_htlc_subscription_id,
 		vtxo_txid, exit_delta, policy_type, policy, server_pubkey, amount,
 		count(*) OVER () AS row_count,
@@ -270,7 +237,7 @@ WITH inventory AS (
 SELECT vtxo_id, anchor_point, id,
 	CASE WHEN row_count < $2 AND byte_count <= $3 THEN vtxo ELSE NULL END AS vtxo,
 	expiry, oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
-	confirmed_height, spend_state, created_at, updated_at, decided_for_fallback, frontier_at,
+	confirmed_height, spend_state, created_at, updated_at, decided_for_fallback,
 	onchain_spent_height, onchain_spent_txid, lightning_htlc_subscription_id,
 	vtxo_txid, exit_delta, policy_type,
 	CASE WHEN row_count < $2 AND byte_count <= $3 THEN policy ELSE NULL END AS policy,
@@ -301,18 +268,17 @@ impl Tx<'_> {
 		ensure!(count <= limits.max_rows, "complete backing snapshot exceeds row budget");
 		ensure!(serialized_bytes <= limits.max_serialized_bytes, "complete backing snapshot exceeds serialized byte budget");
 		let mut snapshot = BackingSnapshot {
-			roots: roots.to_vec(), regular: Vec::new(), serialized_bytes,
+			roots: roots.to_vec(), regular: Vec::new(),
 		};
 		for row in rows {
 			let id = VtxoId::from_str(row.get::<_, &str>("vtxo_id"))?;
 			let anchor = OutPoint::from_str(row.get::<_, &str>("anchor_point"))?;
-			let frontier_at = row.get("frontier_at");
 			let onchain_spent_height = optional_height(&row, "onchain_spent_height")?;
 			let onchain_spent_txid = row.get::<_, Option<&str>>("onchain_spent_txid").map(Txid::from_str).transpose()?;
 			let lightning_htlc_subscription_id = row.get("lightning_htlc_subscription_id");
 			let data = row.get::<_, &[u8]>("vtxo");
 			let encoded: ServerVtxo = ServerVtxo::deserialize(data)?;
-			let (full_vtxo, genesis) = decode_genesis(data)?;
+			let full_vtxo = decode_genesis(data)?;
 			ensure!(encoded.id() == id && encoded.chain_anchor() == anchor &&
 				encoded.expiry_height().to_u32() == u32::try_from(row.get::<_, i32>("expiry"))? &&
 				encoded.point().txid.to_string() == row.get::<_, &str>("vtxo_txid") &&
@@ -325,7 +291,7 @@ impl Tx<'_> {
 			let state = VtxoState::<Bare, ServerVtxoPolicy>::try_from(row)?;
 			ensure!(state.vtxo.id() == id && state.vtxo.chain_anchor() == anchor,
 				"backing snapshot source facts disagree");
-			snapshot.regular.push(BackingVtxoFact { state, full_vtxo, genesis, frontier_at,
+			snapshot.regular.push(BackingVtxoFact { state, full_vtxo,
 				onchain_spent_height, onchain_spent_txid, lightning_htlc_subscription_id });
 		}
 		for root in roots {
@@ -338,24 +304,15 @@ impl Tx<'_> {
 	}
 }
 
-fn genesis_availability<P: ark::vtxo::Policy>(vtxo: &ark::Vtxo<Full, P>) -> SnapshotGenesis {
-	if vtxo.exit_depth() > 0 { SnapshotGenesis::EncodedPath }
-	else if vtxo.point() == vtxo.chain_anchor() { SnapshotGenesis::Anchor }
-	else { SnapshotGenesis::MissingPath }
-}
-
 /// Missing path is an explicit source representation. Every other decode error
 /// refuses the complete inventory; we never substitute a guessed genesis.
-fn decode_genesis(bytes: &[u8]) -> anyhow::Result<(Option<ServerVtxo<Full>>, SnapshotGenesis)> {
+fn decode_genesis(bytes: &[u8]) -> anyhow::Result<Option<ServerVtxo<Full>>> {
 	match ServerVtxo::<Full>::deserialize(bytes) {
-		Ok(full) => {
-			let availability = genesis_availability(&full);
-			Ok((Some(full), availability))
-		},
+		Ok(full) => Ok(Some(full)),
 		Err(ProtocolDecodingError::Invalid { source: Some(source), .. })
 			if matches!(source.downcast_ref::<VtxoValidationError>(), Some(VtxoValidationError::MissingGenesisItems)) =>
 		{
-			Ok((None, SnapshotGenesis::MissingPath))
+			Ok(None)
 		},
 		Err(error) => Err(error.into()),
 	}
@@ -376,15 +333,12 @@ mod test {
 	#[test]
 	fn backing_snapshot_genesis_availability_does_not_invent_bare_paths() {
 		let full = ServerVtxo::from(VTXO_VECTORS.arkoor2_vtxo.clone());
-		let (decoded, availability) = decode_genesis(&full.serialize()).unwrap();
-		assert_eq!(availability, SnapshotGenesis::EncodedPath);
+		let decoded = decode_genesis(&full.serialize()).unwrap();
 		assert!(decoded.is_some());
-		let (decoded, availability) = decode_genesis(&full.to_bare().serialize()).unwrap();
-		assert_eq!(availability, SnapshotGenesis::MissingPath);
+		let decoded = decode_genesis(&full.to_bare().serialize()).unwrap();
 		assert!(decoded.is_none());
 		let board = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
-		let (decoded, availability) = decode_genesis(&board.to_bare().serialize()).unwrap();
-		assert_eq!(availability, SnapshotGenesis::MissingPath);
+		let decoded = decode_genesis(&board.to_bare().serialize()).unwrap();
 		assert!(decoded.is_none(), "bare Board user output is not its funding anchor");
 		let encoded = full.serialize();
 		assert!(decode_genesis(&encoded[..encoded.len() - 1]).is_err(), "truncation is not missing-path evidence");
@@ -401,7 +355,7 @@ mod test {
 			item.tx.output.into_iter().enumerate().filter(|(_, out)| out.is_p2a_fee_anchor())
 				.map(move |(vout, txout)| BackingPartitionResidual { outpoint: OutPoint::new(txid, vout as u32), txout })
 		}).collect();
-		(BackingSnapshot { roots: vec![root], regular: vec![], serialized_bytes: 0 },
+		(BackingSnapshot { roots: vec![root], regular: vec![] },
 			source, vector.anchor_tx.clone(), residuals)
 	}
 
@@ -409,9 +363,7 @@ mod test {
 	fn backing_partition_exact_board_anchor_conservation_and_refusal() {
 		let (snapshot, source, funding, residuals) = board_partition_fixture();
 		let limits = BackingSnapshotLimits { max_rows: 100, max_serialized_bytes: 1_000_000 };
-		let partition = snapshot.check_partition(&[source.clone()], &[funding.clone()], &residuals, limits).unwrap();
-		assert_eq!(partition.roots[0].terminal_amount, source.amount());
-		assert_eq!(partition.roots[0].anchor_residual_amount, Amount::from_sat(330));
+		snapshot.check_partition(&[source.clone()], &[funding.clone()], &residuals, limits).unwrap();
 		assert_eq!(source.amount() + Amount::from_sat(330), snapshot.roots[0].amount());
 		assert!(snapshot.check_partition(&[source.clone()], &[funding.clone()], &[], limits).is_err());
 		let mut wrong = residuals.clone();
@@ -429,7 +381,7 @@ mod test {
 			root.amount() + Amount::from_sat(1), root.expiry_height(), root.server_pubkey(),
 			root.exit_delta(), root.chain_anchor());
 		assert_eq!(bad_root.point(), snapshot.roots[0].point());
-		let wrong_metadata = BackingSnapshot { roots: vec![bad_root], regular: vec![], serialized_bytes: 0 };
+		let wrong_metadata = BackingSnapshot { roots: vec![bad_root], regular: vec![] };
 		let error = wrong_metadata.check_partition(&[source.clone()], &[funding.clone()], &residuals, limits).unwrap_err();
 		assert!(format!("{error:#}").contains("root metadata differs"), "actual funding identity alone cannot authorize different TxOut metadata");
 

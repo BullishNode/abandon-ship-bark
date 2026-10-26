@@ -32,5 +32,4 @@ pub struct Config {
 	/// Minimum confirmed funds in sats required to create a CPFP transaction.
 	#[serde(with = "crate::utils::serde::string")]
 	pub min_cpfp_amount: Amount,
-
 }

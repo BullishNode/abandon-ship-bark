@@ -31,8 +31,11 @@ in the bundle.
 Use fresh server and client stores for this release. Mailbox-only v4
 registrations and signed addresses replace the earlier account-xpub format.
 There is no conversion, backfill or compatibility mode for earlier fork stores
-or addresses. Complete stores from this release can reopen with their original
-registrations and obligations. Keep earlier stores and backups intact.
+or addresses. Server migration 73 and wallet migration 43 create the fallback
+tables through the ordinary migration runners. Earlier fork stores, including
+ones with mailbox-only v4 registrations, are not converted. Complete stores
+created by this release can reopen with their original registrations and
+obligations. Keep earlier stores and backups intact.
 
 ## Install from a release
 
@@ -549,8 +552,8 @@ separately from orderly cold backup recovery.
    both completed canonical chain views. Reconcile all registrations,
    obligations, balances, UTXOs and source-specific Lightning outcomes.
 8. Require the expiry ledger to rebuild before financial work resumes. A
-   subsequent financial commit on the same chain view must change its history
-   token. Require every previously accepted registration and unpaid obligation
+   subsequent financial commit on the same chain view must appear in the rebuilt
+   payout state. Require every previously accepted registration and unpaid obligation
    to survive. Require the pending allocation to complete exactly once, the held
    coin to remain held, and the next new payout to pay its rightful owner.
    Independently close customer principal, stated fees, operator remainder and

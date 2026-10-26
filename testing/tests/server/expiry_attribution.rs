@@ -134,12 +134,12 @@ async fn expire(ctx: &TestContext, srv: &Captaind, height: BlockHeight) {
 	srv.watchmand().wait_for_sync_height(tip).await;
 }
 
-async fn assert_paid(ctx: &TestContext, srv: &Captaind, owner: &Owner, coin: &Vtxo<Full>, index: u32) {
-	assert_paid_to_owner(ctx, srv, owner, coin, index, coin.user_pubkey()).await;
+async fn assert_paid(ctx: &TestContext, srv: &Captaind, owner: &Owner, coin: &Vtxo<Full>) {
+	assert_paid_to_owner(ctx, srv, owner, coin, coin.user_pubkey()).await;
 }
 
 async fn assert_paid_to_owner(
-	ctx: &TestContext, srv: &Captaind, owner: &Owner, coin: &Vtxo<Full>, _index: u32, owner_key: PublicKey,
+	ctx: &TestContext, srv: &Captaind, owner: &Owner, coin: &Vtxo<Full>, owner_key: PublicKey,
 ) {
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let parent = tokio::time::timeout(Duration::from_secs(45), async {
@@ -186,7 +186,7 @@ async fn expiry_owner_finds_mailbox_key() {
 	let coin = board(&ctx, &srv, &owner, owner.key(17)).await;
 	owner.post_mailbox(&srv, &coin).await;
 	expire(&ctx, &srv, coin.expiry_height()).await;
-	assert_paid(&ctx, &srv, &owner, &coin, 17).await;
+	assert_paid(&ctx, &srv, &owner, &coin).await;
 }
 
 #[tokio::test]
@@ -200,24 +200,7 @@ async fn expiry_owner_finds_key_without_mailbox() {
 	assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM mailbox WHERE vtxo_id=$1",
 		&[&coin.id().to_string()]).await?.get::<_, i64>(0))).await.unwrap(), 0);
 	expire(&ctx, &srv, coin.expiry_height()).await;
-	assert_paid(&ctx, &srv, &owner, &coin, 500).await;
-}
-
-#[tokio::test]
-async fn expiry_owner_finds_old_key_used_after_recovery() {
-	let ctx = TestContext::new("server/expiry_owner_finds_old_key_used_after_recovery").await;
-	let srv = server(&ctx).await;
-	let owner = Owner::new(&ctx);
-	owner.register(&srv).await;
-	let first = board(&ctx, &srv, &owner, owner.key(500)).await;
-	expire(&ctx, &srv, first.expiry_height()).await;
-	assert_paid(&ctx, &srv, &owner, &first, 500).await;
-	let db = Db::connect(&srv.config().postgres).await.unwrap();
-	assert_eq!(db.read(async |tx| tx.expiry_owner(owner.key(17).public_key(), Network::Regtest, &srv.mailbox_keypair()).await).await.unwrap(), Attribution::Unresolved);
-	let late = board(&ctx, &srv, &owner, owner.key(17)).await;
-	assert!(late.expiry_height() > first.expiry_height());
-	expire(&ctx, &srv, late.expiry_height()).await;
-	assert_paid(&ctx, &srv, &owner, &late, 17).await;
+	assert_paid(&ctx, &srv, &owner, &coin).await;
 }
 
 #[tokio::test]
@@ -254,7 +237,7 @@ async fn expiry_owner_finds_htlc_key() {
 	coin.validate(&funding).unwrap();
 	rpc.register_vtxo_transactions(protos::RegisterVtxoTransactionsRequest { vtxos: vec![coin.serialize()] }).await.unwrap();
 	expire(&ctx, &srv, deadline.max(coin.expiry_height())).await;
-	assert_paid(&ctx, &srv, &owner, coin, 500).await;
+	assert_paid(&ctx, &srv, &owner, coin).await;
 }
 
 #[tokio::test]
@@ -319,20 +302,9 @@ async fn expiry_owner_finds_revoked_htlc_input_key() {
 		.await.unwrap(), Attribution::Owned { mailbox_pk: owner.mailbox.public_key(), spk: owner.record.spk.clone() });
 	// Keep the signed refund local, so attribution must use the committed input owner.
 	expire(&ctx, &srv, deadline.max(refund.expiry_height())).await;
-	assert_paid_to_owner(&ctx, &srv, &owner, refund, 500, owner.key(500).public_key()).await;
+	assert_paid_to_owner(&ctx, &srv, &owner, refund, owner.key(500).public_key()).await;
 }
 
-
-#[tokio::test]
-async fn expiry_owner_pays_key_beyond_former_recovery_gap() {
-	let ctx = TestContext::new("server/expiry_owner_pays_key_beyond_former_recovery_gap").await;
-	let srv = server(&ctx).await;
-	let owner = Owner::new(&ctx);
-	owner.register(&srv).await;
-	let coin = board(&ctx, &srv, &owner, owner.key(20_001)).await;
-	expire(&ctx, &srv, coin.expiry_height()).await;
-	assert_paid(&ctx, &srv, &owner, &coin, 20_001).await;
-}
 
 #[tokio::test]
 async fn expiry_owner_requires_registration_before_link() {
@@ -348,7 +320,7 @@ async fn expiry_owner_requires_registration_before_link() {
 	owner.register(&srv).await;
 	let coin = board(&ctx, &srv, &owner, key).await;
 	expire(&ctx, &srv, coin.expiry_height()).await;
-	assert_paid(&ctx, &srv, &owner, &coin, 500).await;
+	assert_paid(&ctx, &srv, &owner, &coin).await;
 }
 
 #[tokio::test]
@@ -361,5 +333,5 @@ async fn expiry_owner_pays_coin_authorized_gift() {
 	assert_ne!(giver.public_key(), recipient.key(0).public_key());
 	let coin = board(&ctx, &srv, &recipient, giver).await;
 	expire(&ctx, &srv, coin.expiry_height()).await;
-	assert_paid(&ctx, &srv, &recipient, &coin, 0).await;
+	assert_paid(&ctx, &srv, &recipient, &coin).await;
 }

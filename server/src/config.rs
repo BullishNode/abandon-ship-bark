@@ -272,8 +272,6 @@ pub struct Config {
 	/// Bound the duration of new Lightning obligations; settlement can take longer.
 	#[serde(default = "default_max_htlc_expiry_delta")]
 	pub max_htlc_expiry_delta: BlockDelta,
-	/// Confirmations each receive grant's timeout spend needs before refunding its sender.
-	/// Must exceed the supported five-block reorg depth.
 	#[serde(with = "utils::serde::duration")]
 	pub round_interval: Duration,
 	#[serde(with = "utils::serde::duration")]

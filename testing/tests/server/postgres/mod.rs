@@ -73,7 +73,6 @@ async fn lightning_invoice() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
-	super::register_vector_owners(&db).await;
 
 	let dummy_public_key = PublicKey::from_str("038f47dcd43ba6d97fc9ed2e3bba09b175a45fac55f0683e8cf771e8ced4572354")
 		.expect("Failed to create dummy pubkey");
@@ -420,7 +419,6 @@ async fn block_table_independence() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
-	super::register_vector_owners(&db).await;
 
 	// Create test blocks with different hashes at the same height
 	let hash_captaind = bitcoin::BlockHash::from_str("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f").unwrap();
@@ -545,7 +543,6 @@ async fn pending_sweeps() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
-	super::register_vector_owners(&db).await;
 
 	// Initially empty
 	let sweeps = db.read(async |t| t.fetch_pending_sweeps().await).await.unwrap();
@@ -670,7 +667,6 @@ async fn nursery_txs() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
-	super::register_vector_owners(&db).await;
 
 	let tx = Transaction {
 		version: bitcoin::transaction::Version::non_standard(42),
@@ -749,7 +745,6 @@ async fn ephemeral_tweaks() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
-	super::register_vector_owners(&db).await;
 
 	let pubkey = PublicKey::from_str(
 		"038f47dcd43ba6d97fc9ed2e3bba09b175a45fac55f0683e8cf771e8ced4572354"
@@ -2123,7 +2118,6 @@ async fn get_integration_token_config() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
-	super::register_vector_owners(&db).await;
 
 	let integration = db.write(async |t| t.store_integration("test_integration").await).await.unwrap();
 
@@ -2153,7 +2147,6 @@ async fn wallet_changeset() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
-	super::register_vector_owners(&db).await;
 
 	// Empty aggregate changeset
 	let cs = db.read(async |t| t.read_aggregate_changeset(WalletKind::Rounds).await).await.unwrap();

@@ -549,26 +549,17 @@ impl Bark {
 		self.offchain_balance().await.pending_in_round
 	}
 
-	/// Whether this binary reports the current awaiting-settlement balance field.
-	pub async fn supports_awaiting_settlement(&self) -> bool {
-		let balance: serde_json::Value = self.run_json(["balance", "--no-sync"]).await;
-		let _: json::cli::Balance = serde_json::from_value(balance.clone()).expect("balance JSON schema");
-		balance.get("awaiting_settlement_sat").is_some()
-	}
-
 	/// Return the balance, syncing first when `sync` is set, and assert that
-	/// it agrees with the wallet's VTXOs. Legacy bark 0.7.1 and older could
-	/// count a VTXO twice; the awaiting-settlement field identifies builds
-	/// with the current balance contract even when their version is 0.7.1.
+	/// it agrees with the wallet's VTXOs. bark 0.7.1 and older could count a
+	/// VTXO twice, so the checks are skipped for them.
 	pub async fn assert_balance_matches_vtxos(&self, sync: bool) -> json::cli::Balance {
 		let json = if sync {
 			self.run(["balance"]).await
 		} else {
 			self.run(["balance", "--no-sync"]).await
 		};
-		let raw_balance = serde_json::from_str::<serde_json::Value>(&json).unwrap();
-		let balance = serde_json::from_value::<json::cli::Balance>(raw_balance.clone()).unwrap();
-		if !crate::is_bark_version!(> "0.7.1") && raw_balance.get("awaiting_settlement_sat").is_none() {
+		let balance = serde_json::from_str::<json::cli::Balance>(&json).unwrap();
+		if !crate::is_bark_version!(> "0.7.1") {
 			return balance;
 		}
 
@@ -1117,11 +1108,6 @@ impl Bark {
 
 	pub async fn start_exit_all(&self) {
 		self.run(["exit", "start", "--all"]).await;
-	}
-
-	/// Whether this binary exposes the fee margin of the exit estimator.
-	pub async fn supports_exit_fee_margin(&self) -> bool {
-		self.run(["exit", "estimate-fee", "--help"]).await.contains("--fee-margin")
 	}
 
 	pub async fn estimate_exit_fee_all(&self) -> json::web::EmergencyExitFeeEstimateResponse {

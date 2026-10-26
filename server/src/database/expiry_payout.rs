@@ -350,11 +350,7 @@ impl Tx<'_> {
 	/// keep these locks through broadcast, including when the root is not itself
 	/// one of the economic customer terminals.
 	pub async fn lock_unallocated_watchman_inputs(&self, ids: &[ark::VtxoId]) -> anyhow::Result<()> {
-		super::expiry_guard::guard_obligation_changes(self, ids).await?;
-		let ids = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
-		ensure!(self.query_opt("SELECT vtxo_id FROM expiry_allocation_input WHERE vtxo_id=ANY($1) ORDER BY vtxo_id LIMIT 1", &[&ids]).await?.is_none(),
-			"watchman claim backing is reserved for expiry payouts");
-		Ok(())
+		super::expiry_guard::guard_obligation_changes(self, ids).await
 	}
 }
 
@@ -368,7 +364,7 @@ mod tests {
 	use ark::vtxo::Full;
 	use bitcoin_ext::BlockDelta;
 	use crate::database::{SpendState, VtxoState};
-	use crate::database::expiry_inventory::{BackingVtxoFact, SnapshotGenesis};
+	use crate::database::expiry_inventory::BackingVtxoFact;
 	use LightningHtlcSubscriptionStatus::{Canceled, Created, Accepted, HtlcsReady, Settled};
 	use HtlcResolution::{Fulfilled, Revoked};
 
@@ -397,8 +393,8 @@ mod tests {
 				spend_state: SpendState::Spendable, confirmed_height: None, decided_for_fallback: false,
 				created_at: chrono::Local::now(), updated_at: chrono::Local::now(),
 			},
-			full_vtxo: Some(vtxo), genesis: SnapshotGenesis::EncodedPath,
-			frontier_at: None, onchain_spent_height: None, onchain_spent_txid: None,
+			full_vtxo: Some(vtxo),
+			onchain_spent_height: None, onchain_spent_txid: None,
 			lightning_htlc_subscription_id: None,
 		}
 	}
@@ -412,7 +408,7 @@ mod tests {
 		let source = rows.remove(0);
 		let signed = board.transactions().map(|item| (item.tx.compute_txid(), item.tx)).collect();
 		let snapshot = BackingSnapshot {
-			roots: vec![root.to_bare()], serialized_bytes: 0,
+			roots: vec![root.to_bare()],
 			regular: vec![fact(root, Some(board.point().txid)), fact(source, None)],
 		};
 		(spec, board, snapshot, signed)

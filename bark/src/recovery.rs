@@ -17,8 +17,8 @@
 //! missing there.
 //!
 //! Recovery trusts the server's off-chain history, which can omit coins.
-//! A Spent response is reconciled against fresh authenticated fallback
-//! history before adoption. Pending payouts retain validated signed exit
+//! A Spent response is checked against signed ordinary spend evidence and
+//! actual on-chain payouts before adoption. Unproven spends retain signed exit
 //! material until independently confirmed. Prefer maintaining backups;
 //! mnemonic recovery cannot recover records the server withholds.
 
@@ -459,8 +459,8 @@ impl Wallet {
 			}
 		}
 
-		// Off-chain status is followed by account history for every Spent
-		// answer: an admission fence alone is not a completed payout.
+		// A Spent answer needs independent evidence: an admission fence
+		// alone is not a completed payout.
 		let queries = owned.iter().map(|(vtxo, keypair)| (vtxo.id(), keypair)).collect::<Vec<_>>();
 		let states = self.fetch_vtxo_spend_states(&queries).await?;
 
@@ -477,7 +477,7 @@ impl Wallet {
 
 	/// Store owned VTXOs in the state the server reported for them.
 	///
-	/// A Spent response is followed by complete authenticated account history.
+	/// A Spent response needs signed ordinary spend or on-chain payout evidence.
 	/// Undischarged decisions or unavailable history retain validated signed
 	/// material in quarantine; ordinary historical spends remain spent.
 	async fn store_recovered_vtxos(
@@ -513,7 +513,7 @@ impl Wallet {
 			}
 		}
 
-		// Statuses were fetched before this fresh account-history barrier.
+		// Verify the actual spend before adopting the reported state.
 		// Pending decisions retain their validated signed exit material.
 		if !spent.is_empty() {
 			let final_ids = self.adopt_reported_spent(&spent.iter().collect::<Vec<_>>()).await?;

@@ -1,4 +1,4 @@
--- Fork schema for fresh databases; upstream migrations keep their own history.
+-- Initial signature-link schema for fresh fork stores.
 
 CREATE TABLE fallback_record (
 	id BIGSERIAL PRIMARY KEY,

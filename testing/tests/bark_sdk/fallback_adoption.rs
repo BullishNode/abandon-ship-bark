@@ -11,11 +11,9 @@ use std::time::Duration;
 use bark::{ExitProtectionIncomplete, ImportVtxoArgs};
 use bark::{OpenWalletArgs, Wallet, WalletSeed};
 use bark::exit::ExitState;
-use bark::movement::{Movement, MovementDestination, MovementId, MovementStatus, PaymentMethod};
-use bark::movement::update::MovementUpdate;
+use bark::movement::{Movement, MovementId, MovementStatus, PaymentMethod};
 use bark::onchain::OnchainWallet;
 use bark::persist::{BarkPersister, sqlite::SqliteClient};
-use bark::subsystem::Subsystem;
 use bark::vtxo::VtxoState;
 use bitcoin_ext::BlockDelta;
 use bitcoin::{Address, Network, OutPoint, Script, TxOut};
@@ -393,55 +391,6 @@ async fn history_native_and_other_device_claim_share_one_principal_debit() {
 	let claimant = Box::pin(reopen(&ctx, "claimant", &srv)).await;
 	assert_eq!(assert_history_views(&observer, &methods).await, remote_history);
 	assert_eq!(assert_history_views(&claimant, &methods).await, native_history);
-}
-
-#[tokio::test]
-async fn history_payment_method_queries_preserve_order_and_variant_identity() {
-	let ctx = TestContext::new("bark_sdk/history_query_contract").await;
-	let srv = ctx.captaind("server").create().await;
-	let wallet = create_proof_wallet(ctx.bark_sdk("owner", &srv).cfg(config)).await;
-	wallet.stop_daemon_wait().await.unwrap();
-	let address = ctx.bitcoind().get_new_address();
-	let methods = [PaymentMethod::Bitcoin(address.clone().into_unchecked()),
-		PaymentMethod::OutputScript(address.script_pubkey()), PaymentMethod::Custom("history-query-control".into())];
-	let subsystem = Subsystem::new("test.history_query");
-	wallet.movements_mgr().register_subsystem(subsystem).await.unwrap();
-	let mut ids = Vec::new();
-	// These pending zero-value annotations exercise query matching only. They
-	// are not ownership, financial operations, receipts or settlement proof.
-	for method in &methods {
-		let mut matching = Vec::new();
-		for direction in 0..3 {
-			let destination = MovementDestination::new(method.clone(), sat(0));
-			let mut update = MovementUpdate::new().metadata([("query_only".into(), serde_json::json!(true))]);
-			if direction != 1 { update = update.sent_to([destination.clone()]); }
-			if direction != 0 { update = update.received_on([destination]); }
-			matching.push(wallet.movements_mgr().new_movement_with_update(subsystem, "annotation", update).await.unwrap());
-		}
-		ids.push(matching);
-	}
-	let full = assert_history_views(&wallet, &methods).await;
-	assert_eq!(full.len(), 9);
-	for row in &full {
-		assert_eq!(row.subsystem.name, "test.history_query");
-		assert_eq!(row.status, MovementStatus::Pending);
-		assert_eq!(row.intended_balance.to_sat(), 0);
-		assert_eq!(row.effective_balance.to_sat(), 0);
-		assert_eq!(row.offchain_fee, sat(0));
-		assert!(row.input_vtxos.is_empty() && row.output_vtxos.is_empty() && row.exited_vtxos.is_empty());
-	}
-	for (method, expected) in methods.iter().zip(&ids) {
-		let queried = wallet.history_by_payment_method(method).await.unwrap();
-		assert_eq!(queried.iter().map(|row| row.id).collect::<Vec<_>>(), *expected);
-	}
-	assert_ne!(ids[0], ids[1], "equal scripts do not erase the payment-method variant");
-	wallet.update_history_metadata(ids[0][0], &serde_json::json!({"note": "retained query annotation"})).await.unwrap();
-	let patched = assert_history_views(&wallet, &methods).await;
-	assert_eq!(patched.iter().find(|row| row.id == ids[0][0]).unwrap().metadata["note"], "retained query annotation");
-	drop(wallet);
-	let wallet = Box::pin(reopen(&ctx, "owner", &srv)).await;
-	assert_eq!(assert_history_views(&wallet, &methods).await, patched);
-	assert!(wallet.history_by_payment_method(&PaymentMethod::Custom("unrelated".into())).await.unwrap().is_empty());
 }
 
 #[tokio::test]

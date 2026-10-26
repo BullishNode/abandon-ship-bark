@@ -53,7 +53,7 @@ async fn simple_exit() {
 	if estimate_fee_supported {
 		let est = bark.estimate_exit_fee_all().await;
 		assert_eq!(est.txs_to_broadcast, 1, "{:?}", est);
-		if bark.supports_exit_fee_margin().await {
+		if is_bark_version!(> "0.7.1") {
 			assert_eq!(est.exit_broadcast_fee, sat(1_659), "{:?}", est);
 		} else {
 			// Releases up to 0.7.1 ship the walk-priced estimator.
@@ -126,7 +126,7 @@ async fn estimate_emergency_exit_fee_without_onchain_funds() {
 	// with zero on-chain funds.
 	let est = receiver.estimate_exit_fee_all().await;
 	assert_eq!(est.txs_to_broadcast, 3, "{:?}", est);
-	if receiver.supports_exit_fee_margin().await {
+	if is_bark_version!(> "0.7.1") {
 		assert_eq!(est.exit_broadcast_fee, sat(5_492), "{:?}", est);
 	} else {
 		// Releases up to 0.7.1 ship the walk-priced estimator.
@@ -137,7 +137,7 @@ async fn estimate_emergency_exit_fee_without_onchain_funds() {
 
 	// A unit margin strips the default 20% safety scaling from the broadcast leg. The
 	// --fee-margin flag doesn't exist in releases up to 0.7.1.
-	if receiver.supports_exit_fee_margin().await {
+	if is_bark_version!(> "0.7.1") {
 		let raw = receiver.estimate_exit_fee_all_with_margin(1.0).await;
 		assert_eq!(raw.exit_broadcast_fee, sat(4_576), "{:?}", raw);
 		assert_eq!(raw.claim_fee, est.claim_fee, "{:?}", raw);
@@ -164,7 +164,7 @@ async fn estimate_emergency_exit_fee_ongoing_exit() {
 	// Cost of the whole exit tree before any transaction is broadcast.
 	let before = bark.estimate_exit_fee_vtxo(vtxo).await;
 	assert_eq!(before.txs_to_broadcast, 5, "{:?}", before);
-	if bark.supports_exit_fee_margin().await {
+	if is_bark_version!(> "0.7.1") {
 		assert_eq!(before.exit_broadcast_fee, sat(8_292), "{:?}", before);
 	} else {
 		// Releases up to 0.7.1 ship the walk-priced estimator.
@@ -183,7 +183,7 @@ async fn estimate_emergency_exit_fee_ongoing_exit() {
 	// Broadcasted transactions cost nothing now, so only the pending ones are priced.
 	let after = bark.estimate_exit_fee_vtxo(vtxo).await;
 	assert_eq!(after.txs_to_broadcast, 3, "{:?}", after);
-	if bark.supports_exit_fee_margin().await {
+	if is_bark_version!(> "0.7.1") {
 		assert_eq!(after.exit_broadcast_fee, sat(4_976), "{:?}", after);
 	} else {
 		// Releases up to 0.7.1 ship the walk-priced estimator.
@@ -200,7 +200,7 @@ async fn estimate_emergency_exit_fee_ongoing_exit() {
 	// Broadcasted transactions cost nothing now, so only the pending ones are priced.
 	let after = bark.estimate_exit_fee_vtxo(vtxo).await;
 	assert_eq!(after.txs_to_broadcast, 1, "{:?}", after);
-	if bark.supports_exit_fee_margin().await {
+	if is_bark_version!(> "0.7.1") {
 		assert_eq!(after.exit_broadcast_fee, sat(1_659), "{:?}", after);
 	} else {
 		// Releases up to 0.7.1 ship the walk-priced estimator.
@@ -511,7 +511,7 @@ async fn double_exit_call() {
 	if is_bark_version!(> "0.6.1") {
 		let est = bark1.estimate_exit_fee_all().await;
 		assert_eq!(est.txs_to_broadcast, 6, "{:?}", est);
-		if bark1.supports_exit_fee_margin().await {
+		if is_bark_version!(> "0.7.1") {
 			assert_eq!(est.exit_broadcast_fee, sat(10_708), "{:?}", est);
 		} else {
 			// Releases up to 0.7.1 ship the walk-priced estimator.
@@ -1200,7 +1200,7 @@ async fn exit_spend_anchor_single_utxo_required() {
 	if is_bark_version!(> "0.6.1") {
 		let est = bark.estimate_exit_fee_all().await;
 		assert_eq!(est.txs_to_broadcast, 1, "{:?}", est);
-		if bark.supports_exit_fee_margin().await {
+		if is_bark_version!(> "0.7.1") {
 			assert_eq!(est.exit_broadcast_fee, sat(1_659), "{:?}", est);
 		} else {
 			// Releases up to 0.7.1 ship the walk-priced estimator.
@@ -1245,7 +1245,7 @@ async fn exit_spend_anchor_multiple_utxos_required() {
 	if is_bark_version!(> "0.6.1") {
 		let est = bark.estimate_exit_fee_all().await;
 		assert_eq!(est.txs_to_broadcast, 1, "{:?}", est);
-		if bark.supports_exit_fee_margin().await {
+		if is_bark_version!(> "0.7.1") {
 			// Canonical-weight pricing doesn't depend on coin selection, so the fee is
 			// exact even with multiple funding UTXOs.
 			assert_eq!(est.exit_broadcast_fee, sat(1_659), "{:?}", est);

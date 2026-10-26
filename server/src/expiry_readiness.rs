@@ -283,7 +283,6 @@ impl Server {
 				let selected = BackingSnapshot {
 					roots: vec![root.clone()],
 					regular: cut.visited.iter().map(|i| snapshot.regular[*i].clone()).collect(),
-					serialized_bytes: bytes,
 				};
 				let output = ReadyOutput::prove(
 					selected, coins, std::slice::from_ref(&funding), &cut.residuals, INVENTORY_LIMITS

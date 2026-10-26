@@ -452,7 +452,7 @@ async fn watchman_sweeps_round_vtxos() {
 		.expect("the common physical round root must be stored").state.vtxo;
 	assert_eq!(root.amount(), sat(400_000));
 	let selected = server::database::expiry_inventory::BackingSnapshot {
-		roots: vec![root], regular: Vec::new(), serialized_bytes: 0,
+		roots: vec![root], regular: Vec::new(),
 	};
 	let terminals = replacements.iter().cloned().map(ark::ServerVtxo::from).collect::<Vec<_>>();
 	let mut residuals = BTreeMap::new();
@@ -469,12 +469,9 @@ async fn watchman_sweeps_round_vtxos() {
 	}
 	let residuals = residuals.into_iter().map(|(outpoint, txout)|
 		server::database::expiry_inventory::BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
-	let partition = selected.check_partition(&terminals, &[round_funding.clone()], &residuals, limits).unwrap();
-	assert_eq!(partition.roots.len(), 1);
-	assert_eq!(partition.roots[0].terminal_amount, sat(400_000));
-	assert_eq!(partition.roots[0].anchor_residual_amount, Amount::ZERO);
-	assert_eq!(partition.roots[0].terminals.iter().copied().collect::<BTreeSet<_>>(),
-		replacements.iter().map(|coin| coin.id()).collect::<BTreeSet<_>>());
+	selected.check_partition(&terminals, &[round_funding.clone()], &residuals, limits).unwrap();
+	assert_eq!(terminals.iter().map(|coin| coin.amount()).sum::<Amount>(), sat(400_000));
+	assert!(residuals.iter().all(|residual| residual.txout.value == Amount::ZERO));
 	fundings.insert(round_anchor, round_funding.clone());
 	let mut frontiers = BTreeMap::new();
 	for point in originals.iter().map(|coin| coin.chain_anchor()).chain(std::iter::once(round_anchor)) {
@@ -1812,11 +1809,10 @@ async fn watchman_sweeps_lightning_vtxos() {
 			}
 			let residuals = residuals.into_iter().map(|(outpoint, txout)|
 				server::database::expiry_inventory::BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
-			let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new(), serialized_bytes: 0 };
-			let partition = selected.check_partition(&terminals, &[fundings[point].clone()], &residuals, limits).unwrap();
-			assert_eq!(partition.roots.len(), 1);
-			assert_eq!(partition.roots[0].terminal_amount, frontiers[point].value);
-			assert_eq!(partition.roots[0].anchor_residual_amount, Amount::ZERO);
+			let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new() };
+			selected.check_partition(&terminals, &[fundings[point].clone()], &residuals, limits).unwrap();
+			assert_eq!(terminals.iter().map(|coin| coin.amount()).sum::<Amount>(), frontiers[point].value);
+			assert!(residuals.iter().all(|residual| residual.txout.value == Amount::ZERO));
 		}
 		let source_ids = customers.keys().chain(operators.keys()).cloned().collect::<Vec<_>>();
 		let expected = source_ids.iter().cloned().collect::<BTreeSet<_>>();
@@ -2169,7 +2165,7 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 		} }
 	}
 	let residuals = residuals.into_iter().map(|(outpoint, txout)| server::database::expiry_inventory::BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
-	server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new(), serialized_bytes: 0 }
+	server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new() }
 		.check_partition(&replacements.iter().cloned().map(ark::ServerVtxo::from).collect::<Vec<_>>(), &[round_funding], &residuals, limits).unwrap();
 	let core = ctx.bitcoind().sync_client();
 	let raw_fee = |tx: &Transaction| {
@@ -2241,7 +2237,7 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 			}
 		}
 		assert!(!roots.is_empty() && roots.len() <= 18);
-		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new(), serialized_bytes: 0 };
+		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new() };
 		let semantic = originals.iter().cloned().map(|coin| (ark::ServerVtxo::from(coin), None))
 			.chain(replacements.iter().enumerate().skip(2).map(|(owner, coin)| (ark::ServerVtxo::from(coin.clone()), Some(owner))));
 		let mut expected = BTreeMap::new();
@@ -2420,7 +2416,7 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 	}
 	assert_eq!(sat(3_800_000), terminal_outputs.values().map(|output| output.value).sum::<Amount>()
 		+ change.values().map(|output| output.value).sum::<Amount>() + miner);
-	assert_eq!(operator, sat(2_008_000));
+	assert_eq!(operator, sat(10 * 200_000 + 8 * 2_000));
 	let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,e.gross_sat,e.irreversible_facts::TEXT AS facts, \
 		c.allocation_id,c.gross_sat AS allocated,c.disposition,c.owner_mailbox,c.user_pubkey,c.spk,c.fee_sat,c.payout_sat,c.forfeited_sat,c.active \
 		FROM expiry_entitlement e JOIN vtxo v ON v.vtxo_id=e.vtxo_id \
@@ -2654,7 +2650,7 @@ async fn watchman_sweeps_vtxopool_with_exit() {
 			}
 		} }
 		let residuals = residuals.into_iter().map(|(outpoint, txout)| server::database::expiry_inventory::BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
-		server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new(), serialized_bytes: 0 }
+		server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new() }
 			.check_partition(&terminals, &[funding.clone()], &residuals, limits).unwrap();
 	}
 	bark1.start_exit_all().await;
@@ -2684,7 +2680,7 @@ async fn watchman_sweeps_vtxopool_with_exit() {
 		let mut roots = Vec::new();
 		for row in rows {
 			let root = db.read(async |tx| tx.get_bare_vtxo_by_id(ark::VtxoId::from_str(row.get("vtxo_id")).unwrap()).await).await.unwrap().vtxo;
-			let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root.clone()], regular: Vec::new(), serialized_bytes: 0 };
+			let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root.clone()], regular: Vec::new() };
 			if !operators.values().any(|coin| selected.path_root(&ark::ServerVtxo::from(coin.clone()), &fundings[&coin.chain_anchor()]).unwrap().is_some()) { continue; }
 			let actual = core.get_tx_out(&root.point().txid, root.point().vout, Some(true)).unwrap().unwrap();
 			assert!(actual.confirmations > 0);
@@ -2693,7 +2689,7 @@ async fn watchman_sweeps_vtxopool_with_exit() {
 			roots.push(root);
 		}
 		assert!(!roots.is_empty());
-		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new(), serialized_bytes: 0 };
+		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new() };
 		let terminals = operators.values().cloned().map(ark::ServerVtxo::from).collect::<Vec<_>>();
 		let mut residuals = BTreeMap::new();
 		for coin in &terminals {
@@ -3706,7 +3702,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 		} }
 	}
 	let residuals = residuals.into_iter().map(|(outpoint, txout)| server::database::expiry_inventory::BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
-	server::database::expiry_inventory::BackingSnapshot { roots: vec![common], regular: Vec::new(), serialized_bytes: 0 }
+	server::database::expiry_inventory::BackingSnapshot { roots: vec![common], regular: Vec::new() }
 		.check_partition(&[ark::ServerVtxo::from(stale.clone()), ark::ServerVtxo::from(recipient.clone())], &[first_funding], &residuals, limits).unwrap();
 	let bark1_old = bark1.full_clone("bark1_old").await;
 	bark1.send_oor(bark2.address().await, sat(50_000)).await;
@@ -3852,7 +3848,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 		}
 		assert!(!roots.is_empty());
 		assert!(roots.iter().map(|root| root.expiry_height()).collect::<BTreeSet<_>>().len() <= 4);
-		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new(), serialized_bytes: 0 };
+		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new() };
 		let mut semantic = originals.iter().chain([&recipient, &received]).cloned()
 			.map(|coin| (ark::ServerVtxo::from(coin), None)).collect::<Vec<_>>();
 		semantic.extend(changes.iter().cloned().map(|coin| (ark::ServerVtxo::from(coin), Some(0usize))));
@@ -4426,7 +4422,9 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 		assert!(sponsors.insert(OutPoint::new(id, outputs[0].0 as u32), outputs[0].1.clone()).is_none());
 	}
 
-	let wallet = ctx.bark_sdk("bark", &srv).funded(sat(1_000_000)).create().await;
+	// Only the explicit oldest-coin exit may progress across the expiry jump.
+	let wallet = ctx.bark_sdk("bark", &srv).cfg(|cfg| cfg.daemon_manual_sync = true)
+		.funded(sat(1_000_000)).create().await;
 	srv.wait_for_vtxopool(&ctx).await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let initial = futures::TryStreamExt::try_collect::<Vec<_>>(db.load_vtxopool().await.unwrap()).await.unwrap();
@@ -4503,7 +4501,7 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 	assert_eq!(converted, customers.keys().cloned().collect());
 	let limits = server::database::expiry_inventory::BackingSnapshotLimits { max_rows: 10_000, max_serialized_bytes: 10_000_000 };
 	let root = db.read(async |tx| tx.get_bare_vtxo_by_id(ark::VtxoId::from(anchor)).await).await.unwrap().vtxo;
-	let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new(), serialized_bytes: 0 };
+	let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new() };
 	let terminals = customers.values().chain(operators.values()).cloned().map(ark::ServerVtxo::from).collect::<Vec<_>>();
 	let mut residuals = BTreeMap::new();
 	for coin in &terminals { for step in coin.transactions() {
@@ -4581,7 +4579,7 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 		}
 		assert!(!roots.is_empty() && roots.len() <= 2);
 		assert_eq!(roots.iter().map(|root| root.amount()).sum::<Amount>() + oldest.amount(), sat(200_000));
-		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new(), serialized_bytes: 0 };
+		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new() };
 		let mut terminals = Vec::new();
 		let mut residuals = BTreeMap::new();
 		let mut expected = BTreeMap::new();
@@ -5369,7 +5367,7 @@ async fn expiry_same_owner_fragments(name: &str, small_first: bool) {
 	assert_eq!(converted, customers.keys().cloned().collect());
 	let limits = server::database::expiry_inventory::BackingSnapshotLimits { max_rows: 10_000, max_serialized_bytes: 10_000_000 };
 	let root = db.read(async |tx| tx.get_bare_vtxo_by_id(ark::VtxoId::from(anchor)).await).await.unwrap().vtxo;
-	let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new(), serialized_bytes: 0 };
+	let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new() };
 	let terminals = customers.values().chain(operators.values()).cloned().map(ark::ServerVtxo::from).collect::<Vec<_>>();
 	let mut residuals = BTreeMap::new();
 	for coin in &terminals { for step in coin.transactions() {

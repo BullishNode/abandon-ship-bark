@@ -376,7 +376,7 @@ impl ExitInner {
 		ensure!(matches!(full.policy(), VtxoPolicy::Pubkey(_)), "completed exit is not an ordinary own-key leaf");
 		wallet.validate_vtxo(&full).await.context("completed exit lost its valid signed source body")?;
 		let clause = wallet.find_signable_clause(&full).await.context("completed exit has no own signable clause")?;
-		let retained = snapshot.terminal_observations.values().flatten()
+		let retained = snapshot.own_claims.iter()
 			.find(|backup| backup.transaction.compute_txid() == claim.txid).map(|claim| claim.transaction.clone());
 		let actual_claim = match retained {
 			Some(transaction) => transaction,
@@ -491,8 +491,8 @@ impl ExitInner {
 			"confirmed receipt does not spend this exact own user-clause leaf");
 		ensure!(self.chain_source.tip_ref_uncached().await? == tip, "chain changed during own claim completion");
 		let mut retained = self.persister.get_fallback_snapshot().await?;
-		if !retained.terminal_observations.values().flatten().any(|claim| claim.transaction == actual) {
-			retained.terminal_observations.entry(0).or_default().push(crate::fallback::payouts::OwnClaim { transaction: actual.clone() });
+		if !retained.own_claims.iter().any(|claim| claim.transaction == actual) {
+			retained.own_claims.push(crate::fallback::payouts::OwnClaim { transaction: actual.clone() });
 			self.persister.store_fallback_snapshot(&retained).await?;
 		}
 

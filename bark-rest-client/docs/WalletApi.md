@@ -10,6 +10,7 @@ Method | HTTP request | Description
 [**bip321_uri**](WalletApi.md#bip321_uri) | **POST** /api/v1/wallet/bip321 | Build a BIP 321 payment URI
 [**connected**](WalletApi.md#connected) | **GET** /api/v1/wallet/connected | Check server connection
 [**create_wallet**](WalletApi.md#create_wallet) | **POST** /api/v1/wallet/create | Create a wallet
+[**fallback_registration**](WalletApi.md#fallback_registration) | **GET** /api/v1/wallet/fallback | Get fallback registration and payout address
 [**get_vtxo**](WalletApi.md#get_vtxo) | **GET** /api/v1/wallet/vtxos/{id} | Get VTXO detail
 [**get_vtxo_encoded**](WalletApi.md#get_vtxo_encoded) | **GET** /api/v1/wallet/vtxos/{id}/encoded | Get encoded VTXO
 [**history**](WalletApi.md#history) | **GET** /api/v1/wallet/history | Get wallet history (deprecated)
@@ -199,6 +200,31 @@ Name | Type | Description  | Required | Notes
 ### HTTP request headers
 
 - **Content-Type**: application/json
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## fallback_registration
+
+> models::FallbackRegistrationInfo fallback_registration()
+Get fallback registration and payout address
+
+### Parameters
+
+This endpoint does not need any parameter.
+
+### Return type
+
+[**models::FallbackRegistrationInfo**](FallbackRegistrationInfo.md)
+
+### Authorization
+
+[bearer](../README.md#bearer)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
 - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

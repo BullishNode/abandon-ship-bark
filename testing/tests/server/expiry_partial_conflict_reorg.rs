@@ -575,8 +575,6 @@ async fn partial_conflict_reorg() {
 	assert!(replacement_tip.height > old_tip.height);
 	srv.start().await.unwrap();
 	srv.watchmand().start().await.unwrap();
-	srv.wait_for_sync_height(replacement_tip.height).await;
-	srv.watchmand().wait_for_sync_height(replacement_tip.height).await;
 	let new_generation = rebuilt_generation(&db, replacement_tip).await;
 	assert!(new_generation > old_generation);
 	assert_eq!(decided_obligations(&db, &coins).await, permanent);

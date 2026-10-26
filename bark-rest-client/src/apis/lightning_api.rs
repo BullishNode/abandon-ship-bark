@@ -29,6 +29,7 @@ pub enum CancelReceiveError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GenerateInvoiceError {
+    Status409(models::FallbackRefusalError),
     Status500(models::InternalServerError),
     UnknownValue(serde_json::Value),
 }
@@ -37,6 +38,7 @@ pub enum GenerateInvoiceError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GenerateInvoiceForAddressError {
+    Status409(models::FallbackRefusalError),
     Status400(models::BadRequestError),
     Status500(models::InternalServerError),
     UnknownValue(serde_json::Value),
@@ -73,6 +75,7 @@ pub enum ListReceiveStatusesError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum PayError {
+    Status409(models::FallbackRefusalError),
     Status400(models::BadRequestError),
     Status500(models::InternalServerError),
     UnknownValue(serde_json::Value),

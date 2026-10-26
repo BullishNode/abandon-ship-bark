@@ -44,6 +44,7 @@ pub enum BalanceError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Bip321UriError {
+    Status409(models::FallbackRefusalError),
     Status400(models::BadRequestError),
     Status500(models::InternalServerError),
     UnknownValue(serde_json::Value),
@@ -61,6 +62,16 @@ pub enum ConnectedError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum CreateWalletError {
+    Status409(models::FallbackRefusalError),
+    Status500(models::InternalServerError),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`fallback_registration`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum FallbackRegistrationError {
+    Status404(models::NotFoundError),
     Status500(models::InternalServerError),
     UnknownValue(serde_json::Value),
 }
@@ -133,6 +144,7 @@ pub enum NextRoundError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum OffboardAllError {
+    Status409(models::FallbackRefusalError),
     Status500(models::InternalServerError),
     UnknownValue(serde_json::Value),
 }
@@ -141,6 +153,7 @@ pub enum OffboardAllError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum OffboardVtxosError {
+    Status409(models::FallbackRefusalError),
     Status400(models::BadRequestError),
     Status404(models::NotFoundError),
     Status500(),
@@ -167,6 +180,7 @@ pub enum PendingRoundsError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RefreshAllError {
+    Status409(models::FallbackRefusalError),
     Status500(models::InternalServerError),
     UnknownValue(serde_json::Value),
 }
@@ -176,6 +190,7 @@ pub enum RefreshAllError {
 #[serde(untagged)]
 pub enum RefreshCounterpartyError {
     Status404(models::NotFoundError),
+    Status409(models::FallbackRefusalError),
     Status500(models::InternalServerError),
     UnknownValue(serde_json::Value),
 }
@@ -184,6 +199,7 @@ pub enum RefreshCounterpartyError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RefreshDelegatedError {
+    Status409(models::FallbackRefusalError),
     Status400(models::BadRequestError),
     Status404(models::NotFoundError),
     Status500(models::InternalServerError),
@@ -194,6 +210,7 @@ pub enum RefreshDelegatedError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RefreshVtxosError {
+    Status409(models::FallbackRefusalError),
     Status400(models::BadRequestError),
     Status404(models::NotFoundError),
     Status500(models::InternalServerError),
@@ -204,6 +221,7 @@ pub enum RefreshVtxosError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum SendError {
+    Status409(models::FallbackRefusalError),
     Status400(models::BadRequestError),
     Status500(models::InternalServerError),
     UnknownValue(serde_json::Value),
@@ -213,6 +231,7 @@ pub enum SendError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum SendOnchainError {
+    Status409(models::FallbackRefusalError),
     Status500(models::InternalServerError),
     UnknownValue(serde_json::Value),
 }
@@ -228,6 +247,7 @@ pub enum SyncError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum SyncMailboxError {
+    Status409(models::FallbackRefusalError),
     Status500(models::InternalServerError),
     UnknownValue(serde_json::Value),
 }
@@ -492,6 +512,43 @@ pub async fn create_wallet(configuration: &configuration::Configuration, create_
     } else {
         let content = resp.text().await?;
         let entity: Option<CreateWalletError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent { status, content, entity }))
+    }
+}
+
+pub async fn fallback_registration(configuration: &configuration::Configuration, ) -> Result<models::FallbackRegistrationInfo, Error<FallbackRegistrationError>> {
+
+    let uri_str = format!("{}/api/v1/wallet/fallback", configuration.base_path);
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::FallbackRegistrationInfo`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::FallbackRegistrationInfo`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<FallbackRegistrationError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent { status, content, entity }))
     }
 }

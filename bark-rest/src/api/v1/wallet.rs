@@ -251,6 +251,7 @@ pub async fn wallet_delete(
 	summary = "Create a wallet",
 	responses(
 		(status = 200, description = "Wallet created successfully", body = bark_json::web::CreateWalletResponse),
+		(status = 409, description = "The server refused the operation or recipient; inspect the stable refusal code", body = error::FallbackRefusalError),
 		(status = 500, description = "Internal server error", body = error::InternalServerError)
 	),
 	description = "Creates a new wallet with the specified Ark server and chain source \
@@ -448,6 +449,7 @@ pub async fn peek_address(
 	responses(
 		(status = 200, description = "Returns the BIP 321 URI and its destinations", body = bark_json::web::Bip321UriResponse),
 		(status = 400, description = "Requested an upper-case URI that carries case-sensitive data", body = error::BadRequestError),
+		(status = 409, description = "The server refused the operation or recipient; inspect the stable refusal code", body = error::FallbackRefusalError),
 		(status = 500, description = "Internal server error", body = error::InternalServerError)
 	),
 	description = "Builds a single BIP 321 `bitcoin:` URI bundling multiple ways to receive \
@@ -732,6 +734,7 @@ pub async fn pending_rounds(
 		(status = 200, description = "Payment sent successfully", body = bark_json::web::SendResponse),
 		(status = 400, description = "The provided destination is not a valid Ark address, \
 			BOLT11 invoice, BOLT12 offer, Lightning address, or LNURL", body = error::BadRequestError),
+		(status = 409, description = "The server refused the operation or recipient; inspect the stable refusal code", body = error::FallbackRefusalError),
 		(status = 500, description = "Internal server error", body = error::InternalServerError)
 	),
 	description = "Sends an Ark or Lightning payment to the specified destination. Accepts \
@@ -817,6 +820,7 @@ pub async fn send(
 		(status = 400, description = "No VTXO IDs provided, or one of the provided VTXO \
 			IDs is invalid", body = error::BadRequestError),
 		(status = 404, description = "One the VTXOs wasn't found", body = error::NotFoundError),
+		(status = 409, description = "The server refused the operation or recipient; inspect the stable refusal code", body = error::FallbackRefusalError),
 		(status = 500, description = "Internal server error", body = error::InternalServerError)
 	),
 	description = "Registers the specified VTXOs for refresh in the next Ark round. The \
@@ -871,6 +875,7 @@ pub async fn refresh_vtxos(
 		(status = 400, description = "No VTXO IDs provided, or one of the provided VTXO \
 			IDs is invalid", body = error::BadRequestError),
 		(status = 404, description = "One the VTXOs wasn't found", body = error::NotFoundError),
+		(status = 409, description = "The server refused the operation or recipient; inspect the stable refusal code", body = error::FallbackRefusalError),
 		(status = 500, description = "Internal server error", body = error::InternalServerError)
 	),
 	description = "Registers the specified VTXOs for refresh as a delegated participation: \
@@ -919,6 +924,7 @@ pub async fn refresh_delegated(
 	summary = "Refresh all VTXOs",
 	responses(
 		(status = 200, description = "Returns the refresh result", body = bark_json::web::PendingRoundInfo),
+		(status = 409, description = "The server refused the operation or recipient; inspect the stable refusal code", body = error::FallbackRefusalError),
 		(status = 500, description = "Internal server error", body = error::InternalServerError)
 	),
 	description = "Registers all spendable VTXOs for refresh in the next Ark round. The \
@@ -964,6 +970,7 @@ pub async fn refresh_all(
 	responses(
 		(status = 200, description = "Returns the refresh result", body = bark_json::web::PendingRoundInfo),
 		(status = 404, description = "There is no VTXO to refresh", body = error::NotFoundError),
+		(status = 409, description = "The server refused the operation or recipient; inspect the stable refusal code", body = error::FallbackRefusalError),
 		(status = 500, description = "Internal server error", body = error::InternalServerError)
 	),
 	description = "Registers all out-of-round VTXOs held by the wallet for refresh in the \
@@ -1015,6 +1022,7 @@ pub async fn refresh_counterparty(
 		(status = 400, description = "No VTXO IDs provided, or one of the provided \
 			VTXO IDs is invalid, or destination address is invalid", body = error::BadRequestError),
 		(status = 404, description = "One the VTXOs wasn't found", body = error::NotFoundError),
+		(status = 409, description = "The server refused the operation or recipient; inspect the stable refusal code", body = error::FallbackRefusalError),
 		(status = 500, description = "Internal server error")
 	),
 	description = "Cooperatively moves the specified VTXOs off the Ark protocol to an \
@@ -1070,6 +1078,7 @@ pub async fn offboard_vtxos(
 	responses(
 		(status = 200, description = "Returns the offboard transaction id and the movement id",
 			body = bark_json::cli::OffboardResult),
+		(status = 409, description = "The server refused the operation or recipient; inspect the stable refusal code", body = error::FallbackRefusalError),
 		(status = 500, description = "Internal server error", body = error::InternalServerError)
 	),
 	description = "Cooperatively moves all spendable VTXOs off the Ark protocol to an \
@@ -1114,6 +1123,7 @@ pub async fn offboard_all(
 	responses(
 		(status = 200, description = "Returns the offboard transaction id and the movement id",
 			body = bark_json::cli::OffboardResult),
+		(status = 409, description = "The server refused the operation or recipient; inspect the stable refusal code", body = error::FallbackRefusalError),
 		(status = 500, description = "Internal server error", body = error::InternalServerError)
 	),
 	description = "Sends the specified amount to an on-chain address using the wallet's \
@@ -1174,6 +1184,7 @@ pub async fn sync(State(state): State<Arc<ServerState>>) -> HandlerResult<()> {
 	summary = "Sync mailbox only",
 	responses(
 		(status = 200, description = "Returns the mailbox tip after sync", body = bark_json::web::MailboxSyncResponse),
+		(status = 409, description = "The server refused the operation or recipient; inspect the stable refusal code", body = error::FallbackRefusalError),
 		(status = 500, description = "Internal server error", body = error::InternalServerError)
 	),
 	description = "Triggers an immediate mailbox sync without running any of the other \

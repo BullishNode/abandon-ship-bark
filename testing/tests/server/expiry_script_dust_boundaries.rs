@@ -53,7 +53,7 @@ async fn rebuilt(ctx: &TestContext, srv: &Captaind, db: &Db) {
 		loop {
 			if db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+				Ok(view.captaind == point && view.watchmand == point && super::expiry_view_is_rebuilt(tx, view).await?)
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}

@@ -1,0 +1,2621 @@
+diff --git a/CHANGELOG/unreleased/ark-lib/32 b/CHANGELOG/unreleased/ark-lib/32
+deleted file mode 100644
+index 31952a396..000000000
+--- a/CHANGELOG/unreleased/ark-lib/32
++++ /dev/null
+@@ -1,4 +0,0 @@
+-- Add signed fallback registrations
+-  Bind the mailbox key, network, xpub and application-selected payout script
+-  without adding attribution data to payments.
+-  [#32](https://github.com/BullishNode/abandon-ship-bark/pull/32)
+diff --git a/CHANGELOG/unreleased/bark/33 b/CHANGELOG/unreleased/bark/33
+index d3b6c5087..0f52269a0 100644
+--- a/CHANGELOG/unreleased/bark/33
++++ b/CHANGELOG/unreleased/bark/33
+@@ -1,7 +1,3 @@
+-- Make Bitcoin payment-method history agree with complete wallet history
+-  Preserve exact address and output-script matching and movement-ID query order.
+-  Queries read the complete history, so work and memory can grow with its size.
+-  [#33](https://github.com/BullishNode/abandon-ship-bark/pull/33)
+ - Verify the source of Lightning status and mailbox updates
+   Validate the complete HTLC set before changing payment history or refund state.
+   [#33](https://github.com/BullishNode/abandon-ship-bark/pull/33)
+diff --git a/CHANGELOG/unreleased/server/32 b/CHANGELOG/unreleased/server/32
+index aa39c3c00..1d1dfb41e 100644
+--- a/CHANGELOG/unreleased/server/32
++++ b/CHANGELOG/unreleased/server/32
+@@ -1,7 +1,6 @@
+ - Add registered-address emergency payouts for expired VTXOs
+   Verify ownership from immutable registrations before a funded payout. Close
+   expired receiver grants before an internal Lightning refund, at depth six.
+-  Retain confirmed user exit claims for rebroadcast after supported reorgs.
+   [#32](https://github.com/BullishNode/abandon-ship-bark/pull/32)
+   - **BREAKING:** The fork defines a fresh schema. Fresh stores are required;
+     earlier fork formats are not converted.
+diff --git a/bark/src/exit/mod.rs b/bark/src/exit/mod.rs
+index e7dc1e43e..c15dec845 100644
+--- a/bark/src/exit/mod.rs
++++ b/bark/src/exit/mod.rs
+@@ -376,7 +376,7 @@ impl ExitInner {
+ 		ensure!(matches!(full.policy(), VtxoPolicy::Pubkey(_)), "completed exit is not an ordinary own-key leaf");
+ 		wallet.validate_vtxo(&full).await.context("completed exit lost its valid signed source body")?;
+ 		let clause = wallet.find_signable_clause(&full).await.context("completed exit has no own signable clause")?;
+-		let retained = snapshot.terminal_observations.values().flatten()
++		let retained = snapshot.own_claims.iter()
+ 			.find(|backup| backup.transaction.compute_txid() == claim.txid).map(|claim| claim.transaction.clone());
+ 		let actual_claim = match retained {
+ 			Some(transaction) => transaction,
+@@ -491,8 +491,8 @@ impl ExitInner {
+ 			"confirmed receipt does not spend this exact own user-clause leaf");
+ 		ensure!(self.chain_source.tip_ref_uncached().await? == tip, "chain changed during own claim completion");
+ 		let mut retained = self.persister.get_fallback_snapshot().await?;
+-		if !retained.terminal_observations.values().flatten().any(|claim| claim.transaction == actual) {
+-			retained.terminal_observations.entry(0).or_default().push(crate::fallback::payouts::OwnClaim { transaction: actual.clone() });
++		if !retained.own_claims.iter().any(|claim| claim.transaction == actual) {
++			retained.own_claims.push(crate::fallback::payouts::OwnClaim { transaction: actual.clone() });
+ 			self.persister.store_fallback_snapshot(&retained).await?;
+ 		}
+ 
+diff --git a/bark/src/fallback/act_by.rs b/bark/src/fallback/act_by.rs
+index bbf5f8eba..810fdd642 100644
+--- a/bark/src/fallback/act_by.rs
++++ b/bark/src/fallback/act_by.rs
+@@ -92,9 +92,9 @@ impl ExitProtectionReport {
+ 	}
+ }
+ 
+-fn automatic_exit_ownership_known(snapshot: &FallbackSnapshot, id: VtxoId) -> anyhow::Result<bool> {
+-	Ok(!snapshot.verified_ordinary_spends.contains(&id) && !snapshot.adopted_payout_vtxos.contains(&id)
+-		&& !snapshot.unproven_spent_vtxos.contains(&id))
++fn automatic_exit_ownership_known(snapshot: &FallbackSnapshot, id: VtxoId) -> bool {
++	!snapshot.verified_ordinary_spends.contains(&id) && !snapshot.adopted_payout_vtxos.contains(&id)
++		&& !snapshot.unproven_spent_vtxos.contains(&id)
+ }
+ 
+ fn deadlines(expiry: BlockHeight, path_blocks: u32, claim_csv: u32, margin: u32) -> (BlockHeight, BlockHeight, u32) {
+@@ -115,7 +115,7 @@ impl Wallet {
+ 	) -> anyhow::Result<Box<dyn crate::lock_manager::LockGuard>> {
+ 		let guard = self.lock_fallback_history(Duration::from_secs(30)).await?;
+ 		let snapshot = self.inner.db.get_fallback_snapshot().await?;
+-		ensure!(automatic_exit_ownership_known(&snapshot, id)?,
++		ensure!(automatic_exit_ownership_known(&snapshot, id),
+ 			"current ownership or discharge evidence does not authorize this automatic exit");
+ 		Ok(guard)
+ 	}
+@@ -230,7 +230,7 @@ impl Wallet {
+ 
+ 	async fn protect_scheduled_coin(&self, id: VtxoId) -> anyhow::Result<bool> {
+ 		let snapshot = self.inner.db.get_fallback_snapshot().await?;
+-		ensure!(automatic_exit_ownership_known(&snapshot, id)?, "current ownership or discharge evidence does not authorize this automatic exit");
++		ensure!(automatic_exit_ownership_known(&snapshot, id), "current ownership or discharge evidence does not authorize this automatic exit");
+ 		for pending in self.pending_round_states().await? {
+ 			if !pending.state().participation().inputs.iter().any(|coin| coin.id() == id) { continue; }
+ 			if let Some(mut pending) = self.try_lock_round_state(pending.id()).await? {
+@@ -262,10 +262,8 @@ impl Wallet {
+ 			if discharged.contains(&stored.id()) || snapshot.verified_ordinary_spends.contains(&stored.id())
+ 				|| !matches!(stored.policy(), VtxoPolicy::Pubkey(_)) { continue; }
+ 			if stored.state == (VtxoState::Locked { holder: None }) && !snapshot.quarantined_vtxos.contains(&stored.id()) { continue; }
+-			match automatic_exit_ownership_known(&snapshot, stored.id()) {
+-				Ok(false) => report.unproven_historical.push(stored.id()),
+-				Ok(true) => {},
+-				Err(error) => { report.issue(Some(stored.id()), "ownership", format!("{:#}", error)); continue; },
++			if !automatic_exit_ownership_known(&snapshot, stored.id()) {
++				report.unproven_historical.push(stored.id());
+ 			}
+ 			report.collect(stored.id(), self.coin_exit_schedule(&stored, tip.height).await);
+ 		}
+@@ -330,11 +328,11 @@ mod tests {
+ 	fn unproven_historic_body_does_not_authorize_automatic_exit() {
+ 		let id = VtxoId::from_slice(&[3; 36]).unwrap();
+ 		let mut snapshot = FallbackSnapshot::default();
+-		assert!(automatic_exit_ownership_known(&snapshot, id).unwrap(), "prior positive local ownership remains protected");
++		assert!(automatic_exit_ownership_known(&snapshot, id), "prior positive local ownership remains protected");
+ 		snapshot.unproven_spent_vtxos.insert(id);
+ 		snapshot.quarantined_vtxos.insert(id);
+ 		snapshot.awaiting_settlement.insert(id);
+-		assert!(!automatic_exit_ownership_known(&snapshot, id).unwrap(), "retention and waiting are not current ownership evidence");
++		assert!(!automatic_exit_ownership_known(&snapshot, id), "retention and waiting are not current ownership evidence");
+ 	}
+ 
+ 
+diff --git a/bark/src/fallback/payouts.rs b/bark/src/fallback/payouts.rs
+index 71e597113..6af3dba27 100644
+--- a/bark/src/fallback/payouts.rs
++++ b/bark/src/fallback/payouts.rs
+@@ -1,21 +1,19 @@
+ //! Local ownership retained while a server spend is reconciled.
+ 
+-use std::collections::{BTreeMap, BTreeSet};
++use std::collections::BTreeSet;
+ use bitcoin::Transaction;
+ use ark::VtxoId;
+ 
+ /// Signed bodies stay in the ordinary wallet store until their spend is verified.
+ #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+-#[serde(default)]
+ #[doc(hidden)]
+ pub struct FallbackSnapshot {
+ 	/// Signed own claims are recovery material, not server payout receipts.
+-	pub terminal_observations: BTreeMap<i64, Vec<OwnClaim>>,
++	pub own_claims: Vec<OwnClaim>,
+ 	pub awaiting_settlement: BTreeSet<VtxoId>,
+ 	pub adopted_payout_vtxos: BTreeSet<VtxoId>,
+ 	pub quarantined_vtxos: BTreeSet<VtxoId>,
+ 	pub unproven_spent_vtxos: BTreeSet<VtxoId>,
+-	pub ordinary_spend_cursor: Option<VtxoId>,
+ 	pub verified_ordinary_spends: BTreeSet<VtxoId>,
+ }
+ 
+diff --git a/bark/src/fallback/protection.rs b/bark/src/fallback/protection.rs
+index 7eee14917..6820a1a95 100644
+--- a/bark/src/fallback/protection.rs
++++ b/bark/src/fallback/protection.rs
+@@ -36,8 +36,8 @@ impl Wallet {
+ 		if !spends_user_claim(coin, transaction) { return Ok(()); }
+ 		let _guard = self.lock_fallback_history(std::time::Duration::from_secs(30)).await?;
+ 		let mut snapshot = self.inner.db.get_fallback_snapshot().await?;
+-		if snapshot.terminal_observations.values().flatten().any(|claim| claim.transaction == *transaction) { return Ok(()); }
+-		snapshot.terminal_observations.entry(0).or_default().push(super::payouts::OwnClaim { transaction: transaction.clone() });
++		if snapshot.own_claims.iter().any(|claim| claim.transaction == *transaction) { return Ok(()); }
++		snapshot.own_claims.push(super::payouts::OwnClaim { transaction: transaction.clone() });
+ 		self.inner.db.store_fallback_snapshot(&snapshot).await
+ 	}
+ 
+diff --git a/bark/src/import.rs b/bark/src/import.rs
+index 6037f168b..5876daacd 100644
+--- a/bark/src/import.rs
++++ b/bark/src/import.rs
+@@ -5,8 +5,9 @@
+ //!
+ //! The wallet owns a VTXO when it can derive the VTXO's user pubkey from its
+ //! seed. That keypair also authorizes the query that asks the server whether
+-//! the VTXO is spent. A Spent answer is followed by authenticated fallback
+-//! history; pending payouts retain their signed material in quarantine.
++//! the VTXO is spent. A Spent answer is checked against signed ordinary
++//! spend evidence and actual on-chain payouts; unproven spends retain their
++//! signed material in quarantine.
+ 
+ use anyhow::Context;
+ use bitcoin::secp256k1::Keypair;
+diff --git a/bark/src/lib.rs b/bark/src/lib.rs
+index 45db10b8f..c9cbca041 100644
+--- a/bark/src/lib.rs
++++ b/bark/src/lib.rs
+@@ -1743,7 +1743,7 @@ impl Wallet {
+ 
+ 	/// Fetches all wallet fund movements ordered from newest to oldest.
+ 	pub async fn history(&self) -> anyhow::Result<Vec<Movement>> {
+-		self.inner.db.get_all_movements().await
++		Ok(self.inner.db.get_all_movements().await?)
+ 	}
+ 
+ 	/// Applies an [RFC 7396](https://www.rfc-editor.org/rfc/rfc7396) JSON Merge Patch to the
+diff --git a/bark/src/persist/sqlite/migrations/m0043_fallback.rs b/bark/src/persist/sqlite/migrations/m0043_fallback.rs
+new file mode 100644
+index 000000000..5681d1fa2
+--- /dev/null
++++ b/bark/src/persist/sqlite/migrations/m0043_fallback.rs
+@@ -0,0 +1,26 @@
++//! Initial signature-link fallback state for fresh fork wallets.
++
++use rusqlite::Transaction;
++
++use super::Migration;
++
++pub struct Migration0043 {}
++
++impl Migration for Migration0043 {
++	fn name(&self) -> &str { "Create signature-link fallback state" }
++
++	fn to_version(&self) -> i64 { 43 }
++
++	fn do_migration(&self, conn: &Transaction) -> anyhow::Result<()> {
++		conn.execute_batch("CREATE TABLE bark_fallback_record (
++			id INTEGER PRIMARY KEY CHECK (id = 1),
++			record BLOB NOT NULL,
++			spk BLOB NOT NULL,
++			registered INTEGER NOT NULL DEFAULT 1
++		);
++		CREATE TABLE bark_fallback_snapshot (
++			id INTEGER PRIMARY KEY CHECK (id = 1), snapshot BLOB NOT NULL
++		);")?;
++		Ok(())
++	}
++}
+diff --git a/bark/src/persist/sqlite/migrations/mod.rs b/bark/src/persist/sqlite/migrations/mod.rs
+index 571ba0b05..0d933f79f 100644
+--- a/bark/src/persist/sqlite/migrations/mod.rs
++++ b/bark/src/persist/sqlite/migrations/mod.rs
+@@ -40,6 +40,7 @@ mod m0039_movement_action_id;
+ mod m0040_unlock_failed_movement_vtxos_again;
+ mod m0041_offboard_action_checkpoint;
+ mod m0042_vtxo_registered;
++mod m0043_fallback;
+ 
+ use anyhow::Context;
+ use log::debug;
+@@ -87,6 +88,7 @@ use m0039_movement_action_id::Migration0039;
+ use m0040_unlock_failed_movement_vtxos_again::Migration0040;
+ use m0041_offboard_action_checkpoint::Migration0041;
+ use m0042_vtxo_registered::Migration0042;
++use m0043_fallback::Migration0043;
+ 
+ pub struct MigrationContext {}
+ 
+@@ -146,6 +148,7 @@ impl MigrationContext {
+ 		self.try_migration(conn, &Migration0040{})?;
+ 		self.try_migration(conn, &Migration0041{})?;
+ 		self.try_migration(conn, &Migration0042{})?;
++		self.try_migration(conn, &Migration0043{})?;
+ 
+ 		Ok(())
+ 	}
+@@ -300,7 +303,7 @@ mod test {
+ 
+ 		// Perform the migrations and confirm it took effect
+ 		migs.do_all_migrations(&mut conn).unwrap();
+-		assert_current_version(&conn, 42).unwrap();
++		assert_current_version(&conn, 43).unwrap();
+ 
+ 		assert!(table_exists(&conn, "bark_vtxo").unwrap());
+ 		assert!(table_exists(&conn, "bark_vtxo_state").unwrap());
+diff --git a/bark/src/persist/sqlite/mod.rs b/bark/src/persist/sqlite/mod.rs
+index e6c11e51d..deb8ad6c5 100644
+--- a/bark/src/persist/sqlite/mod.rs
++++ b/bark/src/persist/sqlite/mod.rs
+@@ -64,17 +64,6 @@ impl SqliteClient {
+ 
+ 		let migrations = migrations::MigrationContext::new();
+ 		migrations.do_all_migrations(&mut conn)?;
+-		let tx = conn.transaction()?;
+-		tx.execute_batch("CREATE TABLE IF NOT EXISTS bark_fallback_record (
+-			id INTEGER PRIMARY KEY CHECK (id = 1),
+-			record BLOB NOT NULL,
+-			spk BLOB NOT NULL,
+-			registered INTEGER NOT NULL DEFAULT 1
+-		);
+-		CREATE TABLE IF NOT EXISTS bark_fallback_snapshot (
+-			id INTEGER PRIMARY KEY CHECK (id = 1), snapshot BLOB NOT NULL
+-		);")?;
+-		tx.commit()?;
+ 
+ 		Ok( Self { connection_string: path })
+ 	}
+@@ -571,7 +560,7 @@ mod test {
+ 	use super::*;
+ 
+ 	#[test]
+-	fn fallback_tables_reopen_without_changing_wallet_records_or_upstream_history() {
++	fn fallback_tables_reopen_without_changing_wallet_records() {
+ 		let (path, conn) = in_memory_db();
+ 		let db = SqliteClient::open(&path).unwrap();
+ 		let history = conn.prepare("SELECT id,value,created_at FROM migrations ORDER BY id").unwrap()
+@@ -598,29 +587,6 @@ mod test {
+ 			|row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))).unwrap(), ("regtest".to_owned(), "deadbeef".to_owned()));
+ 	}
+ 
+-	#[test]
+-	fn fallback_table_creation_rolls_back_if_the_second_statement_fails() {
+-		let (path, mut conn) = in_memory_db();
+-		migrations::MigrationContext::new().do_all_migrations(&mut conn).unwrap();
+-		// An index-name collision fails CREATE TABLE even with IF NOT EXISTS.
+-		// This schema-only fault tests rollback, not an older wallet format.
+-		conn.execute_batch("CREATE INDEX bark_fallback_snapshot ON bark_properties(network);
+-			INSERT INTO bark_properties (id,network,fingerprint) VALUES ('control','regtest','deadbeef');").unwrap();
+-		let before = conn.prepare("SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name").unwrap()
+-			.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+-			.unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap();
+-		let error = SqliteClient::open(&path).unwrap_err();
+-		assert!(error.to_string().contains("bark_fallback_snapshot"), "the second table statement must reach the controlled collision");
+-		let after = conn.prepare("SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name").unwrap()
+-			.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+-			.unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap();
+-		assert_eq!(after, before);
+-		assert_eq!(conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table'
+-			AND name IN ('bark_fallback_record','bark_fallback_snapshot')", [], |row| row.get::<_, i64>(0)).unwrap(), 0);
+-		assert_eq!(conn.query_row("SELECT network,fingerprint FROM bark_properties WHERE id='control'", [],
+-			|row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))).unwrap(), ("regtest".to_owned(), "deadbeef".to_owned()));
+-	}
+-
+ 	#[tokio::test]
+ 	async fn test_add_and_retrieve_vtxos() {
+ 		let vtxo_1 = &VTXO_VECTORS.board_vtxo;
+diff --git a/bark/src/recovery.rs b/bark/src/recovery.rs
+index 7a47717a4..fbb4a1052 100644
+--- a/bark/src/recovery.rs
++++ b/bark/src/recovery.rs
+@@ -17,8 +17,8 @@
+ //! missing there.
+ //!
+ //! Recovery trusts the server's off-chain history, which can omit coins.
+-//! A Spent response is reconciled against fresh authenticated fallback
+-//! history before adoption. Pending payouts retain validated signed exit
++//! A Spent response is checked against signed ordinary spend evidence and
++//! actual on-chain payouts before adoption. Unproven spends retain signed exit
+ //! material until independently confirmed. Prefer maintaining backups;
+ //! mnemonic recovery cannot recover records the server withholds.
+ 
+@@ -459,8 +459,8 @@ impl Wallet {
+ 			}
+ 		}
+ 
+-		// Off-chain status is followed by account history for every Spent
+-		// answer: an admission fence alone is not a completed payout.
++		// A Spent answer needs independent evidence: an admission fence
++		// alone is not a completed payout.
+ 		let queries = owned.iter().map(|(vtxo, keypair)| (vtxo.id(), keypair)).collect::<Vec<_>>();
+ 		let states = self.fetch_vtxo_spend_states(&queries).await?;
+ 
+@@ -477,7 +477,7 @@ impl Wallet {
+ 
+ 	/// Store owned VTXOs in the state the server reported for them.
+ 	///
+-	/// A Spent response is followed by complete authenticated account history.
++	/// A Spent response needs signed ordinary spend or on-chain payout evidence.
+ 	/// Undischarged decisions or unavailable history retain validated signed
+ 	/// material in quarantine; ordinary historical spends remain spent.
+ 	async fn store_recovered_vtxos(
+@@ -513,7 +513,7 @@ impl Wallet {
+ 			}
+ 		}
+ 
+-		// Statuses were fetched before this fresh account-history barrier.
++		// Verify the actual spend before adopting the reported state.
+ 		// Pending decisions retain their validated signed exit material.
+ 		if !spent.is_empty() {
+ 			let final_ids = self.adopt_reported_spent(&spent.iter().collect::<Vec<_>>()).await?;
+diff --git a/docs/operator.md b/docs/operator.md
+index 82f94b017..2e7b232e9 100644
+--- a/docs/operator.md
++++ b/docs/operator.md
+@@ -549,8 +549,8 @@ separately from orderly cold backup recovery.
+    both completed canonical chain views. Reconcile all registrations,
+    obligations, balances, UTXOs and source-specific Lightning outcomes.
+ 8. Require the expiry ledger to rebuild before financial work resumes. A
+-   subsequent financial commit on the same chain view must change its history
+-   token. Require every previously accepted registration and unpaid obligation
++   subsequent financial commit on the same chain view must appear in the rebuilt
++   payout state. Require every previously accepted registration and unpaid obligation
+    to survive. Require the pending allocation to complete exactly once, the held
+    coin to remain held, and the next new payout to pay its rightful owner.
+    Independently close customer principal, stated fees, operator remainder and
+diff --git a/nix/package-server.nix b/nix/package-server.nix
+index eff5e8416..1d800473c 100644
+--- a/nix/package-server.nix
++++ b/nix/package-server.nix
+@@ -23,9 +23,8 @@ let
+ 			(craneLib.fileset.commonCargoSources ./..)
+ 			./../server-rpc/protos
+ 			./../cln-rpc/protos
+-			# The server embeds these SQL files at compile time.
++			# embed_migrations! reads these SQL files at compile time.
+ 			./../server/src/database/migrations
+-			./../server/src/database/fork_schema.sql
+ 		];
+ 	};
+ 
+@@ -39,7 +38,6 @@ let
+ 		strictDeps = true;
+ 		doCheck = false;
+ 
+-
+ 		# Strip via rustc instead of the stdenv fixup phase: the host GNU strip
+ 		# only understands ELF, so a Mach-O or PE artifact would ship unstripped
+ 		# while the Linux ones get stripped. Letting rustc do it works uniformly
+diff --git a/server-rpc/protos/bark_server.proto b/server-rpc/protos/bark_server.proto
+index 9a480339a..b876c5554 100644
+--- a/server-rpc/protos/bark_server.proto
++++ b/server-rpc/protos/bark_server.proto
+@@ -11,7 +11,7 @@ import "core.proto";
+ service ArkService {
+ 	rpc Handshake(HandshakeRequest) returns (HandshakeResponse) {}
+ 	rpc GetArkInfo(core.Empty) returns (ArkInfo) {}
+-	// Register an authenticated immutable mailbox/account/payout binding.
++	// Register an authenticated immutable mailbox/payout binding.
+ 	rpc SetFallback(SetFallbackRequest) returns (SetFallbackResponse) {}
+ 	rpc GetOffboardFeeRate(core.Empty) returns (OffboardFeeRateResponse) {}
+ 
+diff --git a/server/src/config.rs b/server/src/config.rs
+index 73a6c83f2..f205b230f 100644
+--- a/server/src/config.rs
++++ b/server/src/config.rs
+@@ -272,8 +272,6 @@ pub struct Config {
+ 	/// Bound the duration of new Lightning obligations; settlement can take longer.
+ 	#[serde(default = "default_max_htlc_expiry_delta")]
+ 	pub max_htlc_expiry_delta: BlockDelta,
+-	/// Confirmations each receive grant's timeout spend needs before refunding its sender.
+-	/// Must exceed the supported five-block reorg depth.
+ 	#[serde(with = "utils::serde::duration")]
+ 	pub round_interval: Duration,
+ 	#[serde(with = "utils::serde::duration")]
+diff --git a/server/src/database/expiry_geometry.rs b/server/src/database/expiry_geometry.rs
+index 2f74b83d8..ef2bd00a4 100644
+--- a/server/src/database/expiry_geometry.rs
++++ b/server/src/database/expiry_geometry.rs
+@@ -71,7 +71,7 @@ pub(crate) fn economic_cut(
+ 	let terminals = cut.terminals.iter().map(|index| snapshot.regular[*index].full_vtxo.clone()
+ 		.context("expiry current terminal lacks its complete source path"))
+ 		.collect::<anyhow::Result<Vec<_>>>()?;
+-	let selected = BackingSnapshot { roots: vec![root.clone()], regular: Vec::new(), serialized_bytes: 0 };
++	let selected = BackingSnapshot { roots: vec![root.clone()], regular: Vec::new() };
+ 	selected.check_partition(&terminals, std::slice::from_ref(funding), &cut.residuals, limits)
+ 		.context("expiry current economic cut is invalid")?;
+ 	Ok(cut)
+@@ -111,7 +111,7 @@ mod tests {
+ 	use ark::vtxo::Full;
+ 	use ark::vtxo::raw::RawVtxo;
+ 	use crate::database::{SpendState, VtxoState};
+-	use crate::database::expiry_inventory::{BackingVtxoFact, SnapshotGenesis};
++	use crate::database::expiry_inventory::BackingVtxoFact;
+ 
+ 	const TEST_LIMITS: BackingSnapshotLimits = BackingSnapshotLimits { max_rows: 100, max_serialized_bytes: 1_000_000 };
+ 
+@@ -123,8 +123,8 @@ mod tests {
+ 				spend_state: SpendState::Spendable, confirmed_height: None, decided_for_fallback: false,
+ 				created_at: chrono::Local::now(), updated_at: chrono::Local::now(),
+ 			},
+-			full_vtxo: Some(full), genesis: SnapshotGenesis::EncodedPath,
+-			frontier_at: None, onchain_spent_height: None, onchain_spent_txid: None,
++			full_vtxo: Some(full),
++			onchain_spent_height: None, onchain_spent_txid: None,
+ 			lightning_htlc_subscription_id: None,
+ 		}
+ 	}
+@@ -139,7 +139,6 @@ mod tests {
+ 		let root_bare = root.to_bare();
+ 		(BackingSnapshot {
+ 			roots: vec![root_bare], regular: vec![fact(root, Some(exit)), fact(source, None)],
+-			serialized_bytes: 0,
+ 		}, VTXO_VECTORS.anchor_tx.clone())
+ 	}
+ 
+@@ -151,10 +150,8 @@ mod tests {
+ 		assert_eq!(cut.terminals, [1]);
+ 		assert_eq!(cut.visited, [0, 1]);
+ 		let leaf = snapshot.regular[1].full_vtxo.clone().unwrap();
+-		let partition = snapshot.check_partition(&[leaf.clone()], &[funding], &cut.residuals, TEST_LIMITS).unwrap();
+-		assert_eq!(partition.roots[0].terminal_amount, leaf.amount());
+-		assert_eq!(partition.roots[0].anchor_residual_amount, bitcoin::Amount::from_sat(330));
+-		assert_eq!(leaf.amount() + partition.roots[0].anchor_residual_amount, snapshot.roots[0].amount());
++		snapshot.check_partition(&[leaf.clone()], &[funding], &cut.residuals, TEST_LIMITS).unwrap();
++		assert_eq!(leaf.amount() + bitcoin::Amount::from_sat(330), snapshot.roots[0].amount());
+ 	}
+ 
+ 	#[test]
+diff --git a/server/src/database/expiry_inventory.rs b/server/src/database/expiry_inventory.rs
+index e202b6368..2834c4a16 100644
+--- a/server/src/database/expiry_inventory.rs
++++ b/server/src/database/expiry_inventory.rs
+@@ -7,7 +7,6 @@ use std::str::FromStr;
+ use anyhow::Context;
+ use bitcoin::{Amount, OutPoint, Transaction, TxOut, Txid};
+ use bitcoin_ext::{BlockHeight, TxOutExt};
+-use chrono::{DateTime, Utc};
+ use tokio_postgres::Row;
+ 
+ use ark::{ProtocolDecodingError, ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoId};
+@@ -22,25 +21,12 @@ pub struct BackingSnapshotLimits {
+ 	pub max_serialized_bytes: usize,
+ }
+ 
+-/// Availability of encoded genesis, not validity or physical containment.
+-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+-pub enum SnapshotGenesis {
+-	/// The row represents its own chain anchor; no intermediate path is needed.
+-	Anchor,
+-	/// An encoded path is available for the caller to validate against funding.
+-	EncodedPath,
+-	/// Bare intermediate metadata cannot prove which descendants it consumes.
+-	MissingPath,
+-}
+-
+ #[derive(Clone)]
+ pub struct BackingVtxoFact {
+ 	pub state: VtxoState<Bare, ServerVtxoPolicy>,
+ 	/// Present only when the stored encoding supplies a complete path.
+ 	/// Availability still does not prove signatures or physical containment.
+ 	pub full_vtxo: Option<ServerVtxo<Full>>,
+-	pub genesis: SnapshotGenesis,
+-	pub frontier_at: Option<DateTime<Utc>>,
+ 	pub onchain_spent_height: Option<BlockHeight>,
+ 	pub onchain_spent_txid: Option<Txid>,
+ 	pub lightning_htlc_subscription_id: Option<i64>,
+@@ -49,12 +35,11 @@ pub struct BackingVtxoFact {
+ /// Complete known rows for the queried anchors, including spent and intermediate
+ /// representations. A progressed backing's anchor lookup is only a superset:
+ /// the caller must validate full genesis/path containment before treating
+-/// any row as a financially covered leaf. MissingPath is never operator proof.
++/// any row as a financially covered leaf. A missing path is never operator proof.
+ /// Committed expiry decisions take precedence in the ownership resolver.
+ pub struct BackingSnapshot {
+ 	pub roots: Vec<ServerVtxo>,
+ 	pub regular: Vec<BackingVtxoFact>,
+-	pub serialized_bytes: usize,
+ }
+ 
+ /// A caller-supplied transition anchor. Its exact output must be validated by
+@@ -65,21 +50,6 @@ pub struct BackingPartitionResidual {
+ 	pub txout: TxOut,
+ }
+ 
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub struct BackingRootPartition {
+-	pub root: VtxoId,
+-	pub terminals: Vec<VtxoId>,
+-	pub terminal_amount: Amount,
+-	pub anchor_residual_amount: Amount,
+-}
+-
+-/// A complete geometric cut, not proof that the selected members are current
+-/// economic terminals. No ownership, signature, chain or retirement decision.
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub struct BackingPartition {
+-	pub roots: Vec<BackingRootPartition>,
+-}
+-
+ impl BackingSnapshot {
+ 	/// Match one complete source path to its supplied physical root. This proves
+ 	/// geometry and amounts only: ownership, signatures, maturity, current spends
+@@ -127,7 +97,7 @@ impl BackingSnapshot {
+ 		funding: &[Transaction],
+ 		residuals: &[BackingPartitionResidual],
+ 		limits: BackingSnapshotLimits,
+-	) -> anyhow::Result<BackingPartition> {
++	) -> anyhow::Result<()> {
+ 		ensure!(!self.roots.is_empty() && !terminals.is_empty(), "backing partition requires roots and terminals");
+ 		ensure!(limits.max_rows > 0 && limits.max_serialized_bytes > 0, "backing partition budgets must be positive");
+ 		let mut rows = self.roots.len().checked_add(terminals.len())
+@@ -190,10 +160,10 @@ impl BackingSnapshot {
+ 		let mut used_terminals = BTreeSet::new();
+ 		let mut used_residuals = BTreeSet::new();
+ 		let mut used_transitions = BTreeSet::new();
+-		let mut partitions = Vec::with_capacity(self.roots.len());
+ 		for root in &self.roots {
+-			let mut partition = BackingRootPartition { root: root.id(), terminals: Vec::new(),
+-				terminal_amount: Amount::ZERO, anchor_residual_amount: Amount::ZERO };
++			let mut terminal_amount = Amount::ZERO;
++			let mut anchor_residual_amount = Amount::ZERO;
++			let mut has_terminal = false;
+ 			let mut pending = vec![(root.point(), root.txout())];
+ 			while let Some((point, output)) = pending.pop() {
+ 				ensure!(visited.insert(point), "backing partition roots or branches overlap");
+@@ -201,14 +171,14 @@ impl BackingSnapshot {
+ 					ensure!(!transitions.contains_key(&point), "backing partition has ancestor and descendant terminals");
+ 					ensure!(source.txout() == output, "backing partition terminal output differs from path");
+ 					used_terminals.insert(point);
+-					partition.terminals.push(source.id());
+-					partition.terminal_amount = partition.terminal_amount.checked_add(output.value)
++					has_terminal = true;
++					terminal_amount = terminal_amount.checked_add(output.value)
+ 						.context("backing partition terminal amount overflow")?;
+ 				} else if output.is_p2a_fee_anchor() {
+ 					ensure!(residual_map.get(&point).is_some_and(|supplied| **supplied == output),
+ 						"backing partition has a missing or mismatched P2A residual");
+ 					used_residuals.insert(point);
+-					partition.anchor_residual_amount = partition.anchor_residual_amount.checked_add(output.value)
++					anchor_residual_amount = anchor_residual_amount.checked_add(output.value)
+ 						.context("backing partition anchor amount overflow")?;
+ 				} else {
+ 					let (prevout, tx) = transitions.get(&point).context("backing partition has an uncovered output")?;
+@@ -224,17 +194,14 @@ impl BackingSnapshot {
+ 					}
+ 				}
+ 			}
+-			ensure!(!partition.terminals.is_empty(), "backing partition has an unmapped root");
+-			ensure!(partition.terminal_amount.checked_add(partition.anchor_residual_amount) == Some(root.amount()),
++			ensure!(has_terminal, "backing partition has an unmapped root");
++			ensure!(terminal_amount.checked_add(anchor_residual_amount) == Some(root.amount()),
+ 				"backing partition root amount is not conserved");
+-			partition.terminals.sort();
+-			partitions.push(partition);
+ 		}
+ 		ensure!(used_terminals.len() == supplied.len() && used_transitions.len() == transitions.len(),
+ 			"backing partition has extra terminals or transitions");
+ 		ensure!(used_residuals.len() == residual_map.len(), "backing partition has extra P2A residuals");
+-		partitions.sort_by_key(|p| p.root);
+-		Ok(BackingPartition { roots: partitions })
++		Ok(())
+ 	}
+ 
+ }
+@@ -248,20 +215,20 @@ WITH inventory AS (
+ 		oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
+ 		confirmed_height, spend_state::text AS spend_state, created_at, updated_at,
+ 		EXISTS(SELECT 1 FROM expiry_entitlement d WHERE d.vtxo_id=vtxo.vtxo_id) AS decided_for_fallback,
+-		frontier_at, onchain_spent_height, onchain_spent_txid,
++		onchain_spent_height, onchain_spent_txid,
+ 		lightning_htlc_subscription_id, vtxo_txid, exit_delta, policy_type, policy, server_pubkey, amount
+ 	FROM vtxo WHERE anchor_point = ANY($1)
+ ), bounded AS (
+ 	SELECT vtxo_id, anchor_point, id, vtxo, expiry,
+ 		oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
+-		confirmed_height, spend_state, created_at, updated_at, decided_for_fallback, frontier_at,
++		confirmed_height, spend_state, created_at, updated_at, decided_for_fallback,
+ 		onchain_spent_height, onchain_spent_txid, lightning_htlc_subscription_id,
+ 		vtxo_txid, exit_delta, policy_type, policy, server_pubkey, amount
+ 	FROM inventory ORDER BY anchor_point, vtxo_id LIMIT $2
+ ), sized AS (
+ 	SELECT vtxo_id, anchor_point, id, vtxo, expiry,
+ 		oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
+-		confirmed_height, spend_state, created_at, updated_at, decided_for_fallback, frontier_at,
++		confirmed_height, spend_state, created_at, updated_at, decided_for_fallback,
+ 		onchain_spent_height, onchain_spent_txid, lightning_htlc_subscription_id,
+ 		vtxo_txid, exit_delta, policy_type, policy, server_pubkey, amount,
+ 		count(*) OVER () AS row_count,
+@@ -270,7 +237,7 @@ WITH inventory AS (
+ SELECT vtxo_id, anchor_point, id,
+ 	CASE WHEN row_count < $2 AND byte_count <= $3 THEN vtxo ELSE NULL END AS vtxo,
+ 	expiry, oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
+-	confirmed_height, spend_state, created_at, updated_at, decided_for_fallback, frontier_at,
++	confirmed_height, spend_state, created_at, updated_at, decided_for_fallback,
+ 	onchain_spent_height, onchain_spent_txid, lightning_htlc_subscription_id,
+ 	vtxo_txid, exit_delta, policy_type,
+ 	CASE WHEN row_count < $2 AND byte_count <= $3 THEN policy ELSE NULL END AS policy,
+@@ -301,18 +268,17 @@ impl Tx<'_> {
+ 		ensure!(count <= limits.max_rows, "complete backing snapshot exceeds row budget");
+ 		ensure!(serialized_bytes <= limits.max_serialized_bytes, "complete backing snapshot exceeds serialized byte budget");
+ 		let mut snapshot = BackingSnapshot {
+-			roots: roots.to_vec(), regular: Vec::new(), serialized_bytes,
++			roots: roots.to_vec(), regular: Vec::new(),
+ 		};
+ 		for row in rows {
+ 			let id = VtxoId::from_str(row.get::<_, &str>("vtxo_id"))?;
+ 			let anchor = OutPoint::from_str(row.get::<_, &str>("anchor_point"))?;
+-			let frontier_at = row.get("frontier_at");
+ 			let onchain_spent_height = optional_height(&row, "onchain_spent_height")?;
+ 			let onchain_spent_txid = row.get::<_, Option<&str>>("onchain_spent_txid").map(Txid::from_str).transpose()?;
+ 			let lightning_htlc_subscription_id = row.get("lightning_htlc_subscription_id");
+ 			let data = row.get::<_, &[u8]>("vtxo");
+ 			let encoded: ServerVtxo = ServerVtxo::deserialize(data)?;
+-			let (full_vtxo, genesis) = decode_genesis(data)?;
++			let full_vtxo = decode_genesis(data)?;
+ 			ensure!(encoded.id() == id && encoded.chain_anchor() == anchor &&
+ 				encoded.expiry_height().to_u32() == u32::try_from(row.get::<_, i32>("expiry"))? &&
+ 				encoded.point().txid.to_string() == row.get::<_, &str>("vtxo_txid") &&
+@@ -325,7 +291,7 @@ impl Tx<'_> {
+ 			let state = VtxoState::<Bare, ServerVtxoPolicy>::try_from(row)?;
+ 			ensure!(state.vtxo.id() == id && state.vtxo.chain_anchor() == anchor,
+ 				"backing snapshot source facts disagree");
+-			snapshot.regular.push(BackingVtxoFact { state, full_vtxo, genesis, frontier_at,
++			snapshot.regular.push(BackingVtxoFact { state, full_vtxo,
+ 				onchain_spent_height, onchain_spent_txid, lightning_htlc_subscription_id });
+ 		}
+ 		for root in roots {
+@@ -338,24 +304,15 @@ impl Tx<'_> {
+ 	}
+ }
+ 
+-fn genesis_availability<P: ark::vtxo::Policy>(vtxo: &ark::Vtxo<Full, P>) -> SnapshotGenesis {
+-	if vtxo.exit_depth() > 0 { SnapshotGenesis::EncodedPath }
+-	else if vtxo.point() == vtxo.chain_anchor() { SnapshotGenesis::Anchor }
+-	else { SnapshotGenesis::MissingPath }
+-}
+-
+ /// Missing path is an explicit source representation. Every other decode error
+ /// refuses the complete inventory; we never substitute a guessed genesis.
+-fn decode_genesis(bytes: &[u8]) -> anyhow::Result<(Option<ServerVtxo<Full>>, SnapshotGenesis)> {
++fn decode_genesis(bytes: &[u8]) -> anyhow::Result<Option<ServerVtxo<Full>>> {
+ 	match ServerVtxo::<Full>::deserialize(bytes) {
+-		Ok(full) => {
+-			let availability = genesis_availability(&full);
+-			Ok((Some(full), availability))
+-		},
++		Ok(full) => Ok(Some(full)),
+ 		Err(ProtocolDecodingError::Invalid { source: Some(source), .. })
+ 			if matches!(source.downcast_ref::<VtxoValidationError>(), Some(VtxoValidationError::MissingGenesisItems)) =>
+ 		{
+-			Ok((None, SnapshotGenesis::MissingPath))
++			Ok(None)
+ 		},
+ 		Err(error) => Err(error.into()),
+ 	}
+@@ -376,15 +333,12 @@ mod test {
+ 	#[test]
+ 	fn backing_snapshot_genesis_availability_does_not_invent_bare_paths() {
+ 		let full = ServerVtxo::from(VTXO_VECTORS.arkoor2_vtxo.clone());
+-		let (decoded, availability) = decode_genesis(&full.serialize()).unwrap();
+-		assert_eq!(availability, SnapshotGenesis::EncodedPath);
++		let decoded = decode_genesis(&full.serialize()).unwrap();
+ 		assert!(decoded.is_some());
+-		let (decoded, availability) = decode_genesis(&full.to_bare().serialize()).unwrap();
+-		assert_eq!(availability, SnapshotGenesis::MissingPath);
++		let decoded = decode_genesis(&full.to_bare().serialize()).unwrap();
+ 		assert!(decoded.is_none());
+ 		let board = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
+-		let (decoded, availability) = decode_genesis(&board.to_bare().serialize()).unwrap();
+-		assert_eq!(availability, SnapshotGenesis::MissingPath);
++		let decoded = decode_genesis(&board.to_bare().serialize()).unwrap();
+ 		assert!(decoded.is_none(), "bare Board user output is not its funding anchor");
+ 		let encoded = full.serialize();
+ 		assert!(decode_genesis(&encoded[..encoded.len() - 1]).is_err(), "truncation is not missing-path evidence");
+@@ -401,7 +355,7 @@ mod test {
+ 			item.tx.output.into_iter().enumerate().filter(|(_, out)| out.is_p2a_fee_anchor())
+ 				.map(move |(vout, txout)| BackingPartitionResidual { outpoint: OutPoint::new(txid, vout as u32), txout })
+ 		}).collect();
+-		(BackingSnapshot { roots: vec![root], regular: vec![], serialized_bytes: 0 },
++		(BackingSnapshot { roots: vec![root], regular: vec![] },
+ 			source, vector.anchor_tx.clone(), residuals)
+ 	}
+ 
+@@ -409,9 +363,7 @@ mod test {
+ 	fn backing_partition_exact_board_anchor_conservation_and_refusal() {
+ 		let (snapshot, source, funding, residuals) = board_partition_fixture();
+ 		let limits = BackingSnapshotLimits { max_rows: 100, max_serialized_bytes: 1_000_000 };
+-		let partition = snapshot.check_partition(&[source.clone()], &[funding.clone()], &residuals, limits).unwrap();
+-		assert_eq!(partition.roots[0].terminal_amount, source.amount());
+-		assert_eq!(partition.roots[0].anchor_residual_amount, Amount::from_sat(330));
++		snapshot.check_partition(&[source.clone()], &[funding.clone()], &residuals, limits).unwrap();
+ 		assert_eq!(source.amount() + Amount::from_sat(330), snapshot.roots[0].amount());
+ 		assert!(snapshot.check_partition(&[source.clone()], &[funding.clone()], &[], limits).is_err());
+ 		let mut wrong = residuals.clone();
+@@ -429,7 +381,7 @@ mod test {
+ 			root.amount() + Amount::from_sat(1), root.expiry_height(), root.server_pubkey(),
+ 			root.exit_delta(), root.chain_anchor());
+ 		assert_eq!(bad_root.point(), snapshot.roots[0].point());
+-		let wrong_metadata = BackingSnapshot { roots: vec![bad_root], regular: vec![], serialized_bytes: 0 };
++		let wrong_metadata = BackingSnapshot { roots: vec![bad_root], regular: vec![] };
+ 		let error = wrong_metadata.check_partition(&[source.clone()], &[funding.clone()], &residuals, limits).unwrap_err();
+ 		assert!(format!("{error:#}").contains("root metadata differs"), "actual funding identity alone cannot authorize different TxOut metadata");
+ 
+diff --git a/server/src/database/expiry_lightning.rs b/server/src/database/expiry_lightning.rs
+index bae34b333..897a7420d 100644
+--- a/server/src/database/expiry_lightning.rs
++++ b/server/src/database/expiry_lightning.rs
+@@ -107,7 +107,7 @@ impl Tx<'_> {
+ 
+ 	/// Keep a complete existing source scope, without inferring from hash siblings.
+ 	pub(crate) async fn lightning_payment_outcome(
+-		&self, hash: PaymentHash, source_ids: &[VtxoId], attempt_id: Option<i64>,
++		&self, hash: PaymentHash, source_ids: &[VtxoId],
+ 	) -> anyhow::Result<Option<LightningPaymentOutcome>> {
+ 		let mut requested = source_ids.to_vec();
+ 		requested.sort_unstable();
+@@ -116,9 +116,9 @@ impl Tx<'_> {
+ 		let rows = self.query("SELECT a.id,a.status,l.vtxo_id FROM lightning_payment_attempt a \
+ 			JOIN lightning_payment_attempt_htlc_vtxo l ON l.lightning_payment_attempt_id=a.id \
+ 			JOIN vtxo v ON v.vtxo_id=l.vtxo_id JOIN htlc_vtxo h ON h.id=v.id \
+-			WHERE a.payment_hash=$1 AND ($2::BIGINT IS NULL OR a.id=$2) \
++			WHERE a.payment_hash=$1 \
+ 			AND h.payment_hash=a.payment_hash AND h.direction='incoming' ORDER BY a.id,l.vtxo_id",
+-			&[&hash.to_string(), &attempt_id]).await?;
++			&[&hash.to_string()]).await?;
+ 		let mut attempts = BTreeMap::<i64, (LightningPaymentStatus, Vec<VtxoId>)>::new();
+ 		for row in rows {
+ 			let entry = attempts.entry(row.get("id")).or_insert_with(|| (row.get("status"), Vec::new()));
+diff --git a/server/src/database/expiry_payout.rs b/server/src/database/expiry_payout.rs
+index 0c6dcfefd..df15ad7c2 100644
+--- a/server/src/database/expiry_payout.rs
++++ b/server/src/database/expiry_payout.rs
+@@ -350,11 +350,7 @@ impl Tx<'_> {
+ 	/// keep these locks through broadcast, including when the root is not itself
+ 	/// one of the economic customer terminals.
+ 	pub async fn lock_unallocated_watchman_inputs(&self, ids: &[ark::VtxoId]) -> anyhow::Result<()> {
+-		super::expiry_guard::guard_obligation_changes(self, ids).await?;
+-		let ids = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
+-		ensure!(self.query_opt("SELECT vtxo_id FROM expiry_allocation_input WHERE vtxo_id=ANY($1) ORDER BY vtxo_id LIMIT 1", &[&ids]).await?.is_none(),
+-			"watchman claim backing is reserved for expiry payouts");
+-		Ok(())
++		super::expiry_guard::guard_obligation_changes(self, ids).await
+ 	}
+ }
+ 
+@@ -368,7 +364,7 @@ mod tests {
+ 	use ark::vtxo::Full;
+ 	use bitcoin_ext::BlockDelta;
+ 	use crate::database::{SpendState, VtxoState};
+-	use crate::database::expiry_inventory::{BackingVtxoFact, SnapshotGenesis};
++	use crate::database::expiry_inventory::BackingVtxoFact;
+ 	use LightningHtlcSubscriptionStatus::{Canceled, Created, Accepted, HtlcsReady, Settled};
+ 	use HtlcResolution::{Fulfilled, Revoked};
+ 
+@@ -397,8 +393,8 @@ mod tests {
+ 				spend_state: SpendState::Spendable, confirmed_height: None, decided_for_fallback: false,
+ 				created_at: chrono::Local::now(), updated_at: chrono::Local::now(),
+ 			},
+-			full_vtxo: Some(vtxo), genesis: SnapshotGenesis::EncodedPath,
+-			frontier_at: None, onchain_spent_height: None, onchain_spent_txid: None,
++			full_vtxo: Some(vtxo),
++			onchain_spent_height: None, onchain_spent_txid: None,
+ 			lightning_htlc_subscription_id: None,
+ 		}
+ 	}
+@@ -412,7 +408,7 @@ mod tests {
+ 		let source = rows.remove(0);
+ 		let signed = board.transactions().map(|item| (item.tx.compute_txid(), item.tx)).collect();
+ 		let snapshot = BackingSnapshot {
+-			roots: vec![root.to_bare()], serialized_bytes: 0,
++			roots: vec![root.to_bare()],
+ 			regular: vec![fact(root, Some(board.point().txid)), fact(source, None)],
+ 		};
+ 		(spec, board, snapshot, signed)
+diff --git a/server/src/database/fork_schema.sql b/server/src/database/migrations/V73__signature_link_fallback.sql
+similarity index 98%
+rename from server/src/database/fork_schema.sql
+rename to server/src/database/migrations/V73__signature_link_fallback.sql
+index eb7523342..5672f9db8 100644
+--- a/server/src/database/fork_schema.sql
++++ b/server/src/database/migrations/V73__signature_link_fallback.sql
+@@ -1,4 +1,4 @@
+--- Fork schema for fresh databases; upstream migrations keep their own history.
++-- Initial signature-link schema for fresh fork stores.
+ 
+ CREATE TABLE fallback_record (
+ 	id BIGSERIAL PRIMARY KEY,
+diff --git a/server/src/database/mod.rs b/server/src/database/mod.rs
+index 917a59276..dc951323d 100644
+--- a/server/src/database/mod.rs
++++ b/server/src/database/mod.rs
+@@ -89,40 +89,6 @@ const DEFAULT_DATABASE: &str = "postgres";
+ enum AdvisoryLock {
+ 	MailboxWrite = 1,
+ 	HtlcSettlementWrite = 2,
+-	// Key 3 is reserved for the fallback registration snapshot.
+-	Migrations = 4,
+-}
+-
+-/// Keep the driver alive until PostgreSQL receives a cancellation request.
+-/// Closing a socket alone does not interrupt a backend that waits on a lock.
+-struct MigrationConnection {
+-	driver: Option<tokio::task::JoinHandle<Result<(), tokio_postgres::Error>>>,
+-	cancel: tokio_postgres::CancelToken,
+-}
+-
+-impl MigrationConnection {
+-	fn finish(mut self) {
+-		if let Some(driver) = self.driver.take() {
+-			driver.abort();
+-		}
+-	}
+-}
+-
+-impl Drop for MigrationConnection {
+-	fn drop(&mut self) {
+-		let Some(driver) = self.driver.take() else {
+-			return;
+-		};
+-		let cancel = self.cancel.clone();
+-		if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+-			runtime.spawn(async move {
+-				let _ = tokio::time::timeout(Duration::from_secs(5), cancel.cancel_query(NoTls)).await;
+-				driver.abort();
+-			});
+-		} else {
+-			driver.abort();
+-		}
+-	}
+ }
+ 
+ /// An uncommitted offboard fetched for the retry-task commit path. Carries
+@@ -196,30 +162,9 @@ pub struct Db {
+ }
+ 
+ impl Db {
+-	async fn run_migrations(config: &PostgresConfig) -> anyhow::Result<()> {
+-		// The server and watchman can start together. Serialize upstream
+-		// migrations and fork schema initialization on the same connection.
+-		// Use a dedicated session. Cancel its query before closing on a dropped
+-		// startup future; a blocked backend may not notice a closed socket yet.
+-		let pg_config = Self::config(&config.name, config);
+-		let (mut conn, connection) = tokio::time::timeout(
+-			Duration::from_secs(config.connection_timeout_secs), pg_config.connect(NoTls),
+-		).await.context("migration database connection timed out")??;
+-		let connection = MigrationConnection {
+-			cancel: conn.cancel_token(), driver: Some(tokio::spawn(connection)),
+-		};
+-		conn.query_one("SELECT pg_advisory_lock($1)", &[&(AdvisoryLock::Migrations as i64)]).await?;
++	async fn run_migrations(&self) -> anyhow::Result<()> {
++		let mut conn = self.get_conn().await?;
+ 		embedded::migrations::runner().run_async::<Client>(&mut conn).await?;
+-		let tx = conn.transaction().await?;
+-		// The marker and all fork objects commit together on a fresh database.
+-		// Reopening the same schema must not reset its chain view or obligations.
+-		if tx.query_one("SELECT to_regclass('expiry_chain_view') IS NULL", &[])
+-			.await?.get::<_, bool>(0)
+-		{
+-			tx.batch_execute(include_str!("fork_schema.sql")).await?;
+-		}
+-		tx.commit().await?;
+-		connection.finish();
+ 		info!("All migrations got successfully run");
+ 		Ok(())
+ 	}
+@@ -290,10 +235,10 @@ impl Db {
+ 	}
+ 
+ 	pub async fn connect(config: &PostgresConfig) -> anyhow::Result<Self> {
+-		Self::run_migrations(config).await?;
+ 		let pool = Self::pool_connect(&config.name, config).await?;
+ 
+ 		let db = Db { pool };
++		db.run_migrations().await?;
+ 
+ 		Ok(db)
+ 	}
+@@ -372,14 +317,14 @@ impl Db {
+ 	}
+ 
+ 	/// Perform db operations in a tx
+-	async fn do_in_tx<R, F>(&self, read_only: bool, isolation: IsolationLevel, f: F) -> anyhow::Result<R>
++	async fn do_in_tx<R, F>(&self, read_only: bool, f: F) -> anyhow::Result<R>
+ 	where
+ 		F: AsyncFnOnce(&Tx<'_>) -> anyhow::Result<R>,
+ 	{
+ 		let mut conn = self.get_conn().await.context("unable to get db connection")?;
+ 		let pgtx = conn.build_transaction()
+ 			.read_only(read_only)
+-			.isolation_level(isolation)
++			.isolation_level(IsolationLevel::ReadCommitted)
+ 			.start().await
+ 			.context("unable to start db tx")?;
+ 		let tx = Tx { inner: &pgtx };
+@@ -403,24 +348,16 @@ impl Db {
+ 	where
+ 		F: AsyncFnOnce(&Tx<'_>) -> anyhow::Result<R>,
+ 	{
+-		self.do_in_tx(true, IsolationLevel::ReadCommitted, f).await
++		self.do_in_tx(true, f).await
+ 	}
+ 
+-	/// One bounded RPC page observes one immutable database snapshot. The
+-	/// transaction ends with the page; callers never retain it across requests.
+-	pub async fn read_snapshot<R, F>(&self, f: F) -> anyhow::Result<R>
+-	where
+-		F: AsyncFnOnce(&Tx<'_>) -> anyhow::Result<R>,
+-	{
+-		self.do_in_tx(true, IsolationLevel::RepeatableRead, f).await
+-	}
+ 
+ 	/// Perform db operations in write mode
+ 	pub async fn write<R, F>(&self, f: F) -> anyhow::Result<R>
+ 	where
+ 		F: AsyncFnOnce(&Tx<'_>) -> anyhow::Result<R>,
+ 	{
+-		self.do_in_tx(false, IsolationLevel::ReadCommitted, f).await
++		self.do_in_tx(false, f).await
+ 	}
+ }
+ 
+@@ -605,7 +542,6 @@ impl<'t> Tx<'t> {
+ 		limit: usize,
+ 		network: bitcoin::Network,
+ 	) -> anyhow::Result<Vec<MailboxEntry>> {
+-		self.require_registered_mailbox(mailbox_id, network).await?;
+ 		let entries = self.get_mailbox_messages(mailbox_id, checkpoint, limit, network).await?;
+ 		Ok(entries.into_iter()
+ 			.filter(|e| matches!(e.payload, MailboxPayload::Arkoor { .. }))
+diff --git a/server/src/expiry_readiness.rs b/server/src/expiry_readiness.rs
+index 511f5797b..cafa8d70a 100644
+--- a/server/src/expiry_readiness.rs
++++ b/server/src/expiry_readiness.rs
+@@ -283,7 +283,6 @@ impl Server {
+ 				let selected = BackingSnapshot {
+ 					roots: vec![root.clone()],
+ 					regular: cut.visited.iter().map(|i| snapshot.regular[*i].clone()).collect(),
+-					serialized_bytes: bytes,
+ 				};
+ 				let output = ReadyOutput::prove(
+ 					selected, coins, std::slice::from_ref(&funding), &cut.residuals, INVENTORY_LIMITS
+diff --git a/server/src/ln/node_manager.rs b/server/src/ln/node_manager.rs
+index 22afab648..3e1db5740 100644
+--- a/server/src/ln/node_manager.rs
++++ b/server/src/ln/node_manager.rs
+@@ -463,8 +463,8 @@ impl LightningManager {
+ 		payment_hash: PaymentHash,
+ 		source_ids: &[VtxoId],
+ 	) -> anyhow::Result<(PaymentStatus, Vec<VtxoId>)> {
+-		let Some(outcome) = self.db.read_snapshot(async |t|
+-			t.lightning_payment_outcome(payment_hash, source_ids, None).await
++		let Some(outcome) = self.db.read(async |t|
++			t.lightning_payment_outcome(payment_hash, source_ids).await
+ 		).await? else { return Ok((PaymentStatus::Pending, Vec::new())); };
+ 		let status = match outcome.state {
+ 			LightningSourceState::Discharged => {
+diff --git a/server/src/watchman/config.rs b/server/src/watchman/config.rs
+index 24fe13f0d..b5633652f 100644
+--- a/server/src/watchman/config.rs
++++ b/server/src/watchman/config.rs
+@@ -32,5 +32,4 @@ pub struct Config {
+ 	/// Minimum confirmed funds in sats required to create a CPFP transaction.
+ 	#[serde(with = "crate::utils::serde::string")]
+ 	pub min_cpfp_amount: Amount,
+-
+ }
+diff --git a/server/src/watchman/frontier.rs b/server/src/watchman/frontier.rs
+index 6b6d0de37..a5dc02502 100644
+--- a/server/src/watchman/frontier.rs
++++ b/server/src/watchman/frontier.rs
+@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
+ use std::sync::Arc;
+ 
+ use anyhow::Context;
+-use bitcoin::{OutPoint, Transaction, Txid, Witness};
++use bitcoin::{OutPoint, Txid, Witness};
+ use bitcoin::taproot::LeafVersion;
+ use tokio::sync::RwLock;
+ use tracing::{error, trace};
+@@ -85,10 +85,9 @@ impl VtxoExitFrontier {
+ 		&mut self,
+ 		vtxo_id: VtxoId,
+ 		spent_height: BlockHeight,
+-		transaction: &Transaction,
++		spent_txid: Txid,
+ 		witness: &Witness,
+ 	) -> anyhow::Result<bool> {
+-		let spent_txid = transaction.compute_txid();
+ 		if let Some((_height, vtxo)) = self.frontier.remove(&vtxo_id) {
+ 			// Try to extract a preimage from the spending witness if this is an HTLC vtxo.
+ 			// This must succeed before we proceed — if persisting the preimage fails,
+@@ -301,7 +300,7 @@ impl ChainEventListener for Arc<RwLock<VtxoExitFrontier>> {
+ 			let mut removed_any = false;
+ 			for input in &tx.input {
+ 				if frontier.spend(
+-					input.previous_output.into(), height, tx, &input.witness,
++					input.previous_output.into(), height, txid, &input.witness,
+ 				).await? {
+ 					removed_any = true;
+ 				}
+diff --git a/testing/src/bark.rs b/testing/src/bark.rs
+index 1325dbcce..7e3d5df31 100644
+--- a/testing/src/bark.rs
++++ b/testing/src/bark.rs
+@@ -549,26 +549,17 @@ impl Bark {
+ 		self.offchain_balance().await.pending_in_round
+ 	}
+ 
+-	/// Whether this binary reports the current awaiting-settlement balance field.
+-	pub async fn supports_awaiting_settlement(&self) -> bool {
+-		let balance: serde_json::Value = self.run_json(["balance", "--no-sync"]).await;
+-		let _: json::cli::Balance = serde_json::from_value(balance.clone()).expect("balance JSON schema");
+-		balance.get("awaiting_settlement_sat").is_some()
+-	}
+-
+ 	/// Return the balance, syncing first when `sync` is set, and assert that
+-	/// it agrees with the wallet's VTXOs. Legacy bark 0.7.1 and older could
+-	/// count a VTXO twice; the awaiting-settlement field identifies builds
+-	/// with the current balance contract even when their version is 0.7.1.
++	/// it agrees with the wallet's VTXOs. bark 0.7.1 and older could count a
++	/// VTXO twice, so the checks are skipped for them.
+ 	pub async fn assert_balance_matches_vtxos(&self, sync: bool) -> json::cli::Balance {
+ 		let json = if sync {
+ 			self.run(["balance"]).await
+ 		} else {
+ 			self.run(["balance", "--no-sync"]).await
+ 		};
+-		let raw_balance = serde_json::from_str::<serde_json::Value>(&json).unwrap();
+-		let balance = serde_json::from_value::<json::cli::Balance>(raw_balance.clone()).unwrap();
+-		if !crate::is_bark_version!(> "0.7.1") && raw_balance.get("awaiting_settlement_sat").is_none() {
++		let balance = serde_json::from_str::<json::cli::Balance>(&json).unwrap();
++		if !crate::is_bark_version!(> "0.7.1") {
+ 			return balance;
+ 		}
+ 
+@@ -1119,11 +1110,6 @@ impl Bark {
+ 		self.run(["exit", "start", "--all"]).await;
+ 	}
+ 
+-	/// Whether this binary exposes the fee margin of the exit estimator.
+-	pub async fn supports_exit_fee_margin(&self) -> bool {
+-		self.run(["exit", "estimate-fee", "--help"]).await.contains("--fee-margin")
+-	}
+-
+ 	pub async fn estimate_exit_fee_all(&self) -> json::web::EmergencyExitFeeEstimateResponse {
+ 		self.run_json(["exit", "estimate-fee", "--all"]).await
+ 	}
+diff --git a/testing/tests/bark/arkoor.rs b/testing/tests/bark/arkoor.rs
+index e7a9526be..985dd23b4 100644
+--- a/testing/tests/bark/arkoor.rs
++++ b/testing/tests/bark/arkoor.rs
+@@ -73,7 +73,7 @@ async fn receive_expired_arkoor_while_offline() {
+ 	bark2.sync().await;
+ 	assert_eq!(bark2.vtxos().await.len(), 1);
+ 	let balance = bark2.offchain_balance().await;
+-	if is_bark_version!(> "0.7.1") || bark2.supports_awaiting_settlement().await {
++	if is_bark_version!(> "0.7.1") {
+ 		assert_eq!(balance.needs_refresh, sat(100_000), "{balance:?}");
+ 		assert_eq!(balance.spendable, Amount::ZERO, "{balance:?}");
+ 	} else {
+diff --git a/testing/tests/bark/exit.rs b/testing/tests/bark/exit.rs
+index 0b842e26e..f7a319097 100644
+--- a/testing/tests/bark/exit.rs
++++ b/testing/tests/bark/exit.rs
+@@ -53,7 +53,7 @@ async fn simple_exit() {
+ 	if estimate_fee_supported {
+ 		let est = bark.estimate_exit_fee_all().await;
+ 		assert_eq!(est.txs_to_broadcast, 1, "{:?}", est);
+-		if bark.supports_exit_fee_margin().await {
++		if is_bark_version!(> "0.7.1") {
+ 			assert_eq!(est.exit_broadcast_fee, sat(1_659), "{:?}", est);
+ 		} else {
+ 			// Releases up to 0.7.1 ship the walk-priced estimator.
+@@ -126,7 +126,7 @@ async fn estimate_emergency_exit_fee_without_onchain_funds() {
+ 	// with zero on-chain funds.
+ 	let est = receiver.estimate_exit_fee_all().await;
+ 	assert_eq!(est.txs_to_broadcast, 3, "{:?}", est);
+-	if receiver.supports_exit_fee_margin().await {
++	if is_bark_version!(> "0.7.1") {
+ 		assert_eq!(est.exit_broadcast_fee, sat(5_492), "{:?}", est);
+ 	} else {
+ 		// Releases up to 0.7.1 ship the walk-priced estimator.
+@@ -137,7 +137,7 @@ async fn estimate_emergency_exit_fee_without_onchain_funds() {
+ 
+ 	// A unit margin strips the default 20% safety scaling from the broadcast leg. The
+ 	// --fee-margin flag doesn't exist in releases up to 0.7.1.
+-	if receiver.supports_exit_fee_margin().await {
++	if is_bark_version!(> "0.7.1") {
+ 		let raw = receiver.estimate_exit_fee_all_with_margin(1.0).await;
+ 		assert_eq!(raw.exit_broadcast_fee, sat(4_576), "{:?}", raw);
+ 		assert_eq!(raw.claim_fee, est.claim_fee, "{:?}", raw);
+@@ -164,7 +164,7 @@ async fn estimate_emergency_exit_fee_ongoing_exit() {
+ 	// Cost of the whole exit tree before any transaction is broadcast.
+ 	let before = bark.estimate_exit_fee_vtxo(vtxo).await;
+ 	assert_eq!(before.txs_to_broadcast, 5, "{:?}", before);
+-	if bark.supports_exit_fee_margin().await {
++	if is_bark_version!(> "0.7.1") {
+ 		assert_eq!(before.exit_broadcast_fee, sat(8_292), "{:?}", before);
+ 	} else {
+ 		// Releases up to 0.7.1 ship the walk-priced estimator.
+@@ -183,7 +183,7 @@ async fn estimate_emergency_exit_fee_ongoing_exit() {
+ 	// Broadcasted transactions cost nothing now, so only the pending ones are priced.
+ 	let after = bark.estimate_exit_fee_vtxo(vtxo).await;
+ 	assert_eq!(after.txs_to_broadcast, 3, "{:?}", after);
+-	if bark.supports_exit_fee_margin().await {
++	if is_bark_version!(> "0.7.1") {
+ 		assert_eq!(after.exit_broadcast_fee, sat(4_976), "{:?}", after);
+ 	} else {
+ 		// Releases up to 0.7.1 ship the walk-priced estimator.
+@@ -200,7 +200,7 @@ async fn estimate_emergency_exit_fee_ongoing_exit() {
+ 	// Broadcasted transactions cost nothing now, so only the pending ones are priced.
+ 	let after = bark.estimate_exit_fee_vtxo(vtxo).await;
+ 	assert_eq!(after.txs_to_broadcast, 1, "{:?}", after);
+-	if bark.supports_exit_fee_margin().await {
++	if is_bark_version!(> "0.7.1") {
+ 		assert_eq!(after.exit_broadcast_fee, sat(1_659), "{:?}", after);
+ 	} else {
+ 		// Releases up to 0.7.1 ship the walk-priced estimator.
+@@ -511,7 +511,7 @@ async fn double_exit_call() {
+ 	if is_bark_version!(> "0.6.1") {
+ 		let est = bark1.estimate_exit_fee_all().await;
+ 		assert_eq!(est.txs_to_broadcast, 6, "{:?}", est);
+-		if bark1.supports_exit_fee_margin().await {
++		if is_bark_version!(> "0.7.1") {
+ 			assert_eq!(est.exit_broadcast_fee, sat(10_708), "{:?}", est);
+ 		} else {
+ 			// Releases up to 0.7.1 ship the walk-priced estimator.
+@@ -1200,7 +1200,7 @@ async fn exit_spend_anchor_single_utxo_required() {
+ 	if is_bark_version!(> "0.6.1") {
+ 		let est = bark.estimate_exit_fee_all().await;
+ 		assert_eq!(est.txs_to_broadcast, 1, "{:?}", est);
+-		if bark.supports_exit_fee_margin().await {
++		if is_bark_version!(> "0.7.1") {
+ 			assert_eq!(est.exit_broadcast_fee, sat(1_659), "{:?}", est);
+ 		} else {
+ 			// Releases up to 0.7.1 ship the walk-priced estimator.
+@@ -1245,7 +1245,7 @@ async fn exit_spend_anchor_multiple_utxos_required() {
+ 	if is_bark_version!(> "0.6.1") {
+ 		let est = bark.estimate_exit_fee_all().await;
+ 		assert_eq!(est.txs_to_broadcast, 1, "{:?}", est);
+-		if bark.supports_exit_fee_margin().await {
++		if is_bark_version!(> "0.7.1") {
+ 			// Canonical-weight pricing doesn't depend on coin selection, so the fee is
+ 			// exact even with multiple funding UTXOs.
+ 			assert_eq!(est.exit_broadcast_fee, sat(1_659), "{:?}", est);
+diff --git a/testing/tests/bark/fees.rs b/testing/tests/bark/fees.rs
+index b4bd315a3..ffdfd364e 100644
+--- a/testing/tests/bark/fees.rs
++++ b/testing/tests/bark/fees.rs
+@@ -554,7 +554,7 @@ async fn refresh_should_refresh_vtxos_no_dust() {
+ 	// The remaining coin may be refreshable or awaiting fallback reconciliation.
+ 	// The completed round input cannot become another pending principal.
+ 	let balance = bark2.offchain_balance().await;
+-	if bark2.supports_awaiting_settlement().await {
++	if is_bark_version!(> "0.7.1") {
+ 		assert_eq!(balance.spendable, sat(200_000) - expected_fee, "{balance:?}");
+ 		assert_eq!(balance.awaiting_settlement + balance.needs_refresh, sat(331), "{balance:?}");
+ 		let wallet = bark2.client().await;
+@@ -563,9 +563,7 @@ async fn refresh_should_refresh_vtxos_no_dust() {
+ 			"the old 200000-sat round input cannot return to the live coin set");
+ 		assert_eq!(wallet.balance().await.unwrap().total(), sat(200_331) - expected_fee,
+ 			"the 198000-sat replacement and 331-sat pending coin count exactly once");
+-	} else if is_bark_version!(> "0.7.1") {
+-		assert_eq!(balance.spendable, sat(200_000) - expected_fee, "{balance:?}");
+-		assert_eq!(balance.needs_refresh, sat(331), "{balance:?}");
++
+ 	} else {
+ 		assert_eq!(balance.spendable, sat(200_331) - expected_fee, "{balance:?}");
+ 	}
+diff --git a/testing/tests/bark/movement.rs b/testing/tests/bark/movement.rs
+index 71300ec42..cc11c004f 100644
+--- a/testing/tests/bark/movement.rs
++++ b/testing/tests/bark/movement.rs
+@@ -617,7 +617,7 @@ async fn list_movements() {
+ 
+ 	// See https://gitlab.com/ark-bitcoin/bark/-/merge_requests/2579 for why
+ 	// the behavior changed
+-	if is_bark_version!(> "0.7.1") || bark1.supports_awaiting_settlement().await {
++	if is_bark_version!(> "0.7.1") {
+ 		assert_eq!(movements.last().unwrap().output_vtxos.len(), 2);
+ 	}
+ 
+diff --git a/testing/tests/bark_sdk/fallback_adoption.rs b/testing/tests/bark_sdk/fallback_adoption.rs
+index 26f16184b..872b9465d 100644
+--- a/testing/tests/bark_sdk/fallback_adoption.rs
++++ b/testing/tests/bark_sdk/fallback_adoption.rs
+@@ -11,11 +11,9 @@ use std::time::Duration;
+ use bark::{ExitProtectionIncomplete, ImportVtxoArgs};
+ use bark::{OpenWalletArgs, Wallet, WalletSeed};
+ use bark::exit::ExitState;
+-use bark::movement::{Movement, MovementDestination, MovementId, MovementStatus, PaymentMethod};
+-use bark::movement::update::MovementUpdate;
++use bark::movement::{Movement, MovementId, MovementStatus, PaymentMethod};
+ use bark::onchain::OnchainWallet;
+ use bark::persist::{BarkPersister, sqlite::SqliteClient};
+-use bark::subsystem::Subsystem;
+ use bark::vtxo::VtxoState;
+ use bitcoin_ext::BlockDelta;
+ use bitcoin::{Address, Network, OutPoint, Script, TxOut};
+@@ -395,55 +393,6 @@ async fn history_native_and_other_device_claim_share_one_principal_debit() {
+ 	assert_eq!(assert_history_views(&claimant, &methods).await, native_history);
+ }
+ 
+-#[tokio::test]
+-async fn history_payment_method_queries_preserve_order_and_variant_identity() {
+-	let ctx = TestContext::new("bark_sdk/history_query_contract").await;
+-	let srv = ctx.captaind("server").create().await;
+-	let wallet = create_proof_wallet(ctx.bark_sdk("owner", &srv).cfg(config)).await;
+-	wallet.stop_daemon_wait().await.unwrap();
+-	let address = ctx.bitcoind().get_new_address();
+-	let methods = [PaymentMethod::Bitcoin(address.clone().into_unchecked()),
+-		PaymentMethod::OutputScript(address.script_pubkey()), PaymentMethod::Custom("history-query-control".into())];
+-	let subsystem = Subsystem::new("test.history_query");
+-	wallet.movements_mgr().register_subsystem(subsystem).await.unwrap();
+-	let mut ids = Vec::new();
+-	// These pending zero-value annotations exercise query matching only. They
+-	// are not ownership, financial operations, receipts or settlement proof.
+-	for method in &methods {
+-		let mut matching = Vec::new();
+-		for direction in 0..3 {
+-			let destination = MovementDestination::new(method.clone(), sat(0));
+-			let mut update = MovementUpdate::new().metadata([("query_only".into(), serde_json::json!(true))]);
+-			if direction != 1 { update = update.sent_to([destination.clone()]); }
+-			if direction != 0 { update = update.received_on([destination]); }
+-			matching.push(wallet.movements_mgr().new_movement_with_update(subsystem, "annotation", update).await.unwrap());
+-		}
+-		ids.push(matching);
+-	}
+-	let full = assert_history_views(&wallet, &methods).await;
+-	assert_eq!(full.len(), 9);
+-	for row in &full {
+-		assert_eq!(row.subsystem.name, "test.history_query");
+-		assert_eq!(row.status, MovementStatus::Pending);
+-		assert_eq!(row.intended_balance.to_sat(), 0);
+-		assert_eq!(row.effective_balance.to_sat(), 0);
+-		assert_eq!(row.offchain_fee, sat(0));
+-		assert!(row.input_vtxos.is_empty() && row.output_vtxos.is_empty() && row.exited_vtxos.is_empty());
+-	}
+-	for (method, expected) in methods.iter().zip(&ids) {
+-		let queried = wallet.history_by_payment_method(method).await.unwrap();
+-		assert_eq!(queried.iter().map(|row| row.id).collect::<Vec<_>>(), *expected);
+-	}
+-	assert_ne!(ids[0], ids[1], "equal scripts do not erase the payment-method variant");
+-	wallet.update_history_metadata(ids[0][0], &serde_json::json!({"note": "retained query annotation"})).await.unwrap();
+-	let patched = assert_history_views(&wallet, &methods).await;
+-	assert_eq!(patched.iter().find(|row| row.id == ids[0][0]).unwrap().metadata["note"], "retained query annotation");
+-	drop(wallet);
+-	let wallet = Box::pin(reopen(&ctx, "owner", &srv)).await;
+-	assert_eq!(assert_history_views(&wallet, &methods).await, patched);
+-	assert!(wallet.history_by_payment_method(&PaymentMethod::Custom("unrelated".into())).await.unwrap().is_empty());
+-}
+-
+ #[tokio::test]
+ async fn fallback_adoption_fresh_seed_retains_unpaid_body_and_recovers_registered_payout() {
+ 	let ctx = TestContext::new("bark_sdk/fallback_adoption_seed_pending").await;
+diff --git a/testing/tests/bark_sdk/payout_reorg_recovery.rs b/testing/tests/bark_sdk/payout_reorg_recovery.rs
+index 14d9e3f94..ffa16ec73 100644
+--- a/testing/tests/bark_sdk/payout_reorg_recovery.rs
++++ b/testing/tests/bark_sdk/payout_reorg_recovery.rs
+@@ -432,7 +432,7 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
+ 	assert!(matches!(wallet.chain().tx_status(claim.compute_txid()).await.unwrap(),
+ 		bitcoin_ext::TxStatus::Confirmed(block) if block.hash == final_block));
+ 
+-	assert!(claimed_snapshot.terminal_observations.values().flatten().any(|proof| proof.transaction == claim));
++	assert!(claimed_snapshot.own_claims.iter().any(|proof| proof.transaction == claim));
+ 	let second_miner = claim_fork_miner.unwrap();
+ 	assert_ne!(second_miner.script_pubkey(), alternate_miner.script_pubkey());
+ 	// This variant disconnects the published signed exit path while retaining
+@@ -598,7 +598,7 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
+ 		assert_eq!(own_history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), -100_000,
+ 			"reorg recovery must retain one principal debit/reservation, never duplicate it");
+ 		assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), 0);
+-		assert!(snapshot.terminal_observations.values().flatten().any(|proof| proof.transaction == claim));
++		assert!(snapshot.own_claims.iter().any(|proof| proof.transaction == claim));
+ 		let exit = db.get_exit_vtxo_entry(&owned.id()).await.unwrap().unwrap();
+ 		if remove_claim_path {
+ 			assert_eq!(exit.movement_id, Some(movement));
+@@ -748,7 +748,7 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
+ 	assert!(reopened.exit_mgr().list_claimable().await.is_empty());
+ 	assert_eq!(reopened.get_full_vtxo(owned.id()).await.unwrap().serialize(), owned_bytes);
+ 	let settled_snapshot = db.get_fallback_snapshot().await.unwrap();
+-	assert!(settled_snapshot.terminal_observations.values().flatten().any(|backup| backup.transaction == settled_claim));
++	assert!(settled_snapshot.own_claims.iter().any(|backup| backup.transaction == settled_claim));
+ 	assert!(matches!(reopened.chain().tx_status(settled_claim.compute_txid()).await.unwrap(),
+ 		bitcoin_ext::TxStatus::Confirmed(block) if block.hash == settled_block));
+ 	assert!(!matches!(reopened.chain().tx_status(claim.compute_txid()).await.unwrap(), bitcoin_ext::TxStatus::Confirmed(_)));
+diff --git a/testing/tests/server/expiry_attribution.rs b/testing/tests/server/expiry_attribution.rs
+index fda4851ed..b118245c3 100644
+--- a/testing/tests/server/expiry_attribution.rs
++++ b/testing/tests/server/expiry_attribution.rs
+@@ -134,12 +134,12 @@ async fn expire(ctx: &TestContext, srv: &Captaind, height: BlockHeight) {
+ 	srv.watchmand().wait_for_sync_height(tip).await;
+ }
+ 
+-async fn assert_paid(ctx: &TestContext, srv: &Captaind, owner: &Owner, coin: &Vtxo<Full>, index: u32) {
+-	assert_paid_to_owner(ctx, srv, owner, coin, index, coin.user_pubkey()).await;
++async fn assert_paid(ctx: &TestContext, srv: &Captaind, owner: &Owner, coin: &Vtxo<Full>) {
++	assert_paid_to_owner(ctx, srv, owner, coin, coin.user_pubkey()).await;
+ }
+ 
+ async fn assert_paid_to_owner(
+-	ctx: &TestContext, srv: &Captaind, owner: &Owner, coin: &Vtxo<Full>, _index: u32, owner_key: PublicKey,
++	ctx: &TestContext, srv: &Captaind, owner: &Owner, coin: &Vtxo<Full>, owner_key: PublicKey,
+ ) {
+ 	let db = Db::connect(&srv.config().postgres).await.unwrap();
+ 	let parent = tokio::time::timeout(Duration::from_secs(45), async {
+@@ -186,7 +186,7 @@ async fn expiry_owner_finds_mailbox_key() {
+ 	let coin = board(&ctx, &srv, &owner, owner.key(17)).await;
+ 	owner.post_mailbox(&srv, &coin).await;
+ 	expire(&ctx, &srv, coin.expiry_height()).await;
+-	assert_paid(&ctx, &srv, &owner, &coin, 17).await;
++	assert_paid(&ctx, &srv, &owner, &coin).await;
+ }
+ 
+ #[tokio::test]
+@@ -200,24 +200,7 @@ async fn expiry_owner_finds_key_without_mailbox() {
+ 	assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM mailbox WHERE vtxo_id=$1",
+ 		&[&coin.id().to_string()]).await?.get::<_, i64>(0))).await.unwrap(), 0);
+ 	expire(&ctx, &srv, coin.expiry_height()).await;
+-	assert_paid(&ctx, &srv, &owner, &coin, 500).await;
+-}
+-
+-#[tokio::test]
+-async fn expiry_owner_finds_old_key_used_after_recovery() {
+-	let ctx = TestContext::new("server/expiry_owner_finds_old_key_used_after_recovery").await;
+-	let srv = server(&ctx).await;
+-	let owner = Owner::new(&ctx);
+-	owner.register(&srv).await;
+-	let first = board(&ctx, &srv, &owner, owner.key(500)).await;
+-	expire(&ctx, &srv, first.expiry_height()).await;
+-	assert_paid(&ctx, &srv, &owner, &first, 500).await;
+-	let db = Db::connect(&srv.config().postgres).await.unwrap();
+-	assert_eq!(db.read(async |tx| tx.expiry_owner(owner.key(17).public_key(), Network::Regtest, &srv.mailbox_keypair()).await).await.unwrap(), Attribution::Unresolved);
+-	let late = board(&ctx, &srv, &owner, owner.key(17)).await;
+-	assert!(late.expiry_height() > first.expiry_height());
+-	expire(&ctx, &srv, late.expiry_height()).await;
+-	assert_paid(&ctx, &srv, &owner, &late, 17).await;
++	assert_paid(&ctx, &srv, &owner, &coin).await;
+ }
+ 
+ #[tokio::test]
+@@ -254,7 +237,7 @@ async fn expiry_owner_finds_htlc_key() {
+ 	coin.validate(&funding).unwrap();
+ 	rpc.register_vtxo_transactions(protos::RegisterVtxoTransactionsRequest { vtxos: vec![coin.serialize()] }).await.unwrap();
+ 	expire(&ctx, &srv, deadline.max(coin.expiry_height())).await;
+-	assert_paid(&ctx, &srv, &owner, coin, 500).await;
++	assert_paid(&ctx, &srv, &owner, coin).await;
+ }
+ 
+ #[tokio::test]
+@@ -319,21 +302,10 @@ async fn expiry_owner_finds_revoked_htlc_input_key() {
+ 		.await.unwrap(), Attribution::Owned { mailbox_pk: owner.mailbox.public_key(), spk: owner.record.spk.clone() });
+ 	// Keep the signed refund local, so attribution must use the committed input owner.
+ 	expire(&ctx, &srv, deadline.max(refund.expiry_height())).await;
+-	assert_paid_to_owner(&ctx, &srv, &owner, refund, 500, owner.key(500).public_key()).await;
++	assert_paid_to_owner(&ctx, &srv, &owner, refund, owner.key(500).public_key()).await;
+ }
+ 
+ 
+-#[tokio::test]
+-async fn expiry_owner_pays_key_beyond_former_recovery_gap() {
+-	let ctx = TestContext::new("server/expiry_owner_pays_key_beyond_former_recovery_gap").await;
+-	let srv = server(&ctx).await;
+-	let owner = Owner::new(&ctx);
+-	owner.register(&srv).await;
+-	let coin = board(&ctx, &srv, &owner, owner.key(20_001)).await;
+-	expire(&ctx, &srv, coin.expiry_height()).await;
+-	assert_paid(&ctx, &srv, &owner, &coin, 20_001).await;
+-}
+-
+ #[tokio::test]
+ async fn expiry_owner_requires_registration_before_link() {
+ 	let ctx = TestContext::new("server/expiry_owner_requires_registration_before_link").await;
+@@ -348,7 +320,7 @@ async fn expiry_owner_requires_registration_before_link() {
+ 	owner.register(&srv).await;
+ 	let coin = board(&ctx, &srv, &owner, key).await;
+ 	expire(&ctx, &srv, coin.expiry_height()).await;
+-	assert_paid(&ctx, &srv, &owner, &coin, 500).await;
++	assert_paid(&ctx, &srv, &owner, &coin).await;
+ }
+ 
+ #[tokio::test]
+@@ -361,5 +333,5 @@ async fn expiry_owner_pays_coin_authorized_gift() {
+ 	assert_ne!(giver.public_key(), recipient.key(0).public_key());
+ 	let coin = board(&ctx, &srv, &recipient, giver).await;
+ 	expire(&ctx, &srv, coin.expiry_height()).await;
+-	assert_paid(&ctx, &srv, &recipient, &coin, 0).await;
++	assert_paid(&ctx, &srv, &recipient, &coin).await;
+ }
+diff --git a/testing/tests/server/expiry_dust_later_receipt.rs b/testing/tests/server/expiry_dust_later_receipt.rs
+index 97e771c30..d82a1eb48 100644
+--- a/testing/tests/server/expiry_dust_later_receipt.rs
++++ b/testing/tests/server/expiry_dust_later_receipt.rs
+@@ -1,7 +1,8 @@
+ //! Dust forfeiture cannot become principal in a later receipt.
+ 
++use super::expiry_test::{fields, rebuilt, actual_fee, watch_coins, Epoch};
++
+ use std::collections::{BTreeMap, BTreeSet};
+-use std::str::FromStr;
+ use std::time::Duration;
+ 
+ use ark::arkoor::{ArkoorDestination, package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse}};
+@@ -9,26 +10,18 @@ use ark::mailbox::MailboxIdentifier;
+ use ark::{ProtocolEncoding, ServerVtxoPolicy, Vtxo, VtxoId, VtxoPolicy};
+ use ark::vtxo::Full;
+ use ark_testing::{require_bitcoind_chain_source, sat, Captaind, TestContext};
+-use ark_testing::daemon::captaind::WalletAdminClient;
+ use bark::{Wallet};
+ use bark::movement::Movement;
+ use bark::vtxo::VtxoState;
+-use bitcoin::{Amount, BlockHash, Network, OutPoint, ScriptBuf, Transaction, Txid, TxOut};
++use bitcoin::{Amount, Network, OutPoint, ScriptBuf, Transaction, TxOut};
+ use bitcoin::consensus::deserialize;
+ use bitcoin::hex::DisplayHex;
+-use bitcoin_ext::{BlockDelta, BlockRef, TxOutExt};
++use bitcoin_ext::{BlockDelta, TxOutExt};
+ use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
+ use serde_json::json;
+ use server::database::Db;
+ use server_rpc::protos;
+ 
+-fn fields(balance: &bark::Balance) -> [Amount; 10] {
+-	[balance.spendable, balance.needs_refresh, balance.pending_lightning_send,
+-		balance.claimable_lightning_receive, balance.pending_in_round, balance.pending_exit,
+-		balance.pending_board, balance.pending_arkoor_send, balance.pending_offboard,
+-		balance.awaiting_settlement]
+-}
+-
+ async fn balances(wallet: &Wallet, spendable: Amount) {
+ 	let mut expected = [Amount::ZERO; 10];
+ 	expected[0] = spendable;
+@@ -37,40 +30,6 @@ async fn balances(wallet: &Wallet, spendable: Amount) {
+ 		"no live or finished unilateral exit may claim the forfeited principal");
+ }
+ 
+-async fn rebuilt(ctx: &TestContext, srv: &Captaind, db: &Db) {
+-	let height = bitcoin_ext::BlockHeight::new(u32::try_from(ctx.bitcoind().get_block_count().await).unwrap());
+-	srv.wait_for_sync_height(height).await;
+-	srv.watchmand().wait_for_sync_height(height).await;
+-	let point = BlockRef { height, hash: ctx.bitcoind().sync_client().get_best_block_hash().unwrap() };
+-	tokio::time::timeout(Duration::from_secs(15), async {
+-		loop {
+-			if db.read(async |tx| {
+-				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
+-				Ok(view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+-			}).await.unwrap() { break; }
+-			tokio::time::sleep(Duration::from_millis(50)).await;
+-		}
+-	}).await.expect("both completed expiry views must bind the real Core tip");
+-}
+-
+-async fn actual_fee(ctx: &TestContext, transaction: &Transaction) -> Amount {
+-	let mut total = Amount::ZERO;
+-	let mut seen = BTreeSet::new();
+-	for input in &transaction.input {
+-		assert!(seen.insert(input.previous_output));
+-		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+-		total += previous.output[input.previous_output.vout as usize].value;
+-	}
+-	total.checked_sub(transaction.output.iter().map(|output| output.value).sum::<Amount>()).unwrap()
+-}
+-
+-async fn watch_coins(srv: &Captaind) -> BTreeSet<OutPoint> {
+-	let address = srv.watchmand().config().admin_address.unwrap();
+-	let mut rpc = WalletAdminClient::connect(format!("http://{address}")).await.unwrap();
+-	rpc.wallet_status(protos::Empty {}).await.unwrap().into_inner().watchman.unwrap()
+-		.confirmed_utxos.into_iter().map(|point| OutPoint::from_str(&point).unwrap()).collect()
+-}
+-
+ #[derive(Clone)]
+ struct ExpectedLeaf {
+ 	coin: Vtxo<Full>,
+@@ -81,16 +40,6 @@ struct ExpectedLeaf {
+ 	forfeited: u64,
+ }
+ 
+-struct Epoch {
+-	parents: BTreeMap<Txid, Transaction>,
+-	children: BTreeMap<Txid, Transaction>,
+-	allocations: BTreeMap<VtxoId, i64>,
+-	outputs: BTreeMap<VtxoId, Option<OutPoint>>,
+-	hashes: BTreeMap<Txid, BlockHash>,
+-	heights: BTreeMap<Txid, bitcoin_ext::BlockHeight>,
+-	packages: Vec<serde_json::Value>,
+-}
+-
+ /// Use the production cosign, signed-chain registration and mailbox paths.
+ async fn transfer(
+ 	ctx: &TestContext, srv: &Captaind, sender: &Wallet, recipient: &Wallet,
+diff --git a/testing/tests/server/expiry_oversize.rs b/testing/tests/server/expiry_oversize.rs
+index 798cfd4e5..912181794 100644
+--- a/testing/tests/server/expiry_oversize.rs
++++ b/testing/tests/server/expiry_oversize.rs
+@@ -397,10 +397,7 @@ async fn bounded_round_inventory() {
+ 		})
+ 	})).collect::<Vec<_>>();
+ 	let sources = terminals.iter().map(|(_, leaf)| ark::ServerVtxo::from(leaf.clone())).collect::<Vec<_>>();
+-	let partition = snapshot.check_partition(&sources, std::slice::from_ref(&funding), &residuals, limits).unwrap();
+-	assert_eq!(partition.roots.len(), 1);
+-	assert_eq!(partition.roots[0].terminals.len(), COUNT);
+-	assert_eq!(partition.roots[0].terminal_amount, sat(COUNT as u64 * LEAF_SAT));
++	snapshot.check_partition(&sources, std::slice::from_ref(&funding), &residuals, limits).unwrap();
+ 	let proof_rows = snapshot.roots.len() + sources.len() + 1 + residuals.len()
+ 		+ sources.iter().map(|source| usize::from(source.exit_depth())).sum::<usize>();
+ 	let proof_bytes = sources.iter().map(|source| source.serialize().len()).sum::<usize>()
+@@ -415,7 +412,6 @@ async fn bounded_round_inventory() {
+ 	assert!(rows >= COUNT as i64 && rows <= 25_893);
+ 	assert!(bytes > 0 && bytes < 256 * 1024 * 1024);
+ 	assert_eq!(snapshot.regular.len(), rows as usize);
+-	assert_eq!(snapshot.serialized_bytes, bytes as usize);
+ 	let mut mailbox = srv.get_mailbox_public_rpc().await;
+ 	let mailbox_pubkey = srv.ark_info().await.mailbox_pubkey;
+ 	for (index, leaf) in &terminals {
+diff --git a/testing/tests/server/expiry_script_dust_boundaries.rs b/testing/tests/server/expiry_script_dust_boundaries.rs
+index fcc1657a2..970058969 100644
+--- a/testing/tests/server/expiry_script_dust_boundaries.rs
++++ b/testing/tests/server/expiry_script_dust_boundaries.rs
+@@ -1,7 +1,8 @@
+ //! Script-sensitive dust boundaries through original registered SDK accounts.
+ 
++use super::expiry_test::{fields, rebuilt, actual_fee, Epoch, financial_cut};
++
+ use std::collections::{BTreeMap, BTreeSet};
+-use std::str::FromStr;
+ use std::path::PathBuf;
+ use std::sync::Arc;
+ use std::time::Duration;
+@@ -11,31 +12,23 @@ use ark::mailbox::MailboxIdentifier;
+ use ark::{ProtocolEncoding, Vtxo, VtxoId, SECP};
+ use ark::vtxo::Full;
+ use ark_testing::{require_bitcoind_chain_source, sat, Captaind, TestContext};
+-use ark_testing::daemon::captaind::WalletAdminClient;
+ use bark::{OpenWalletArgs, Wallet, WalletSeed};
+ use bark::lock_manager::memory::MemoryLockManager;
+ use bark::persist::sqlite::SqliteClient;
+ use bark::movement::{Movement, MovementStatus};
+ use bark::vtxo::VtxoState;
+-use bitcoin::{Address, Amount, BlockHash, Network, OutPoint, ScriptBuf, Transaction, Txid, TxOut};
++use bitcoin::{Address, Amount, Network, OutPoint, ScriptBuf, Transaction, TxOut};
+ use bitcoin::consensus::deserialize;
+ use bitcoin::script::Builder;
+ use bitcoin::opcodes::all::OP_CHECKSIG;
+ use bitcoin::secp256k1::Keypair;
+ use bitcoin::hex::DisplayHex;
+-use bitcoin_ext::{BlockDelta, BlockRef, TxOutExt};
++use bitcoin_ext::{BlockDelta, TxOutExt};
+ use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
+ use serde_json::json;
+ use server::database::Db;
+ use server_rpc::protos;
+ 
+-fn fields(balance: &bark::Balance) -> [Amount; 10] {
+-	[balance.spendable, balance.needs_refresh, balance.pending_lightning_send,
+-		balance.claimable_lightning_receive, balance.pending_in_round, balance.pending_exit,
+-		balance.pending_board, balance.pending_arkoor_send, balance.pending_offboard,
+-		balance.awaiting_settlement]
+-}
+-
+ async fn balances(wallet: &Wallet, spendable: Amount) {
+ 	let mut expected = [Amount::ZERO; 10];
+ 	expected[0] = spendable;
+@@ -44,40 +37,6 @@ async fn balances(wallet: &Wallet, spendable: Amount) {
+ 		"no live or finished unilateral exit may claim already settled principal");
+ }
+ 
+-async fn rebuilt(ctx: &TestContext, srv: &Captaind, db: &Db) {
+-	let height = bitcoin_ext::BlockHeight::new(u32::try_from(ctx.bitcoind().get_block_count().await).unwrap());
+-	srv.wait_for_sync_height(height).await;
+-	srv.watchmand().wait_for_sync_height(height).await;
+-	let point = BlockRef { height, hash: ctx.bitcoind().sync_client().get_best_block_hash().unwrap() };
+-	tokio::time::timeout(Duration::from_secs(15), async {
+-		loop {
+-			if db.read(async |tx| {
+-				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
+-				Ok(view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+-			}).await.unwrap() { break; }
+-			tokio::time::sleep(Duration::from_millis(50)).await;
+-		}
+-	}).await.expect("both completed expiry views must bind the real Core tip");
+-}
+-
+-async fn actual_fee(ctx: &TestContext, transaction: &Transaction) -> Amount {
+-	let mut total = Amount::ZERO;
+-	let mut seen = BTreeSet::new();
+-	for input in &transaction.input {
+-		assert!(seen.insert(input.previous_output));
+-		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+-		total += previous.output[input.previous_output.vout as usize].value;
+-	}
+-	total.checked_sub(transaction.output.iter().map(|output| output.value).sum::<Amount>()).unwrap()
+-}
+-
+-async fn watch_coins(srv: &Captaind) -> BTreeSet<OutPoint> {
+-	let address = srv.watchmand().config().admin_address.unwrap();
+-	let mut rpc = WalletAdminClient::connect(format!("http://{address}")).await.unwrap();
+-	rpc.wallet_status(protos::Empty {}).await.unwrap().into_inner().watchman.unwrap()
+-		.confirmed_utxos.into_iter().map(|point| OutPoint::from_str(&point).unwrap()).collect()
+-}
+-
+ #[derive(Clone)]
+ struct ExpectedLeaf {
+ 	coin: Vtxo<Full>,
+@@ -89,16 +48,6 @@ struct ExpectedLeaf {
+ 	group_payout: u64,
+ }
+ 
+-struct Epoch {
+-	parents: BTreeMap<Txid, Transaction>,
+-	children: BTreeMap<Txid, Transaction>,
+-	allocations: BTreeMap<VtxoId, i64>,
+-	outputs: BTreeMap<VtxoId, Option<OutPoint>>,
+-	hashes: BTreeMap<Txid, BlockHash>,
+-	heights: BTreeMap<Txid, bitcoin_ext::BlockHeight>,
+-	packages: Vec<serde_json::Value>,
+-}
+-
+ async fn confirm_epoch(
+ 	ctx: &TestContext, srv: &Captaind, db: &Db, leaves: &[ExpectedLeaf], start: u64,
+ ) -> Epoch {
+@@ -236,119 +185,6 @@ async fn receipt(wallet: &Wallet, leaf: &ExpectedLeaf, epoch: &Epoch) -> Option<
+ 
+ /// Canonical block-order reconstruction permits only the declared roots and
+ /// sponsors; historical branches are never added again as external principal.
+-async fn financial_cut(
+-	ctx: &TestContext, srv: &Captaind, db: &Db, scan_height: u64,
+-	roots: &BTreeMap<OutPoint, TxOut>, sponsors: &BTreeMap<OutPoint, TxOut>,
+-	epochs: &[&Epoch], expected_payees: &[(ScriptBuf, Option<u64>)], expected_ids: &BTreeSet<VtxoId>,
+-) -> serde_json::Value {
+-	let core = ctx.bitcoind().sync_client();
+-	let mut cut = sponsors.clone();
+-	for (point, output) in roots { assert!(cut.insert(*point, output.clone()).is_none()); }
+-	let initial = cut.values().map(|output| output.value).sum::<Amount>();
+-	let mut graph = BTreeMap::new();
+-	let mut spent = BTreeSet::new();
+-	let mut all_points = cut.keys().copied().collect::<BTreeSet<_>>();
+-	let mut fees = Amount::ZERO;
+-	let mut canonical_payees = expected_payees.iter().map(|(script, _)|
+-		(script.clone(), Vec::<(OutPoint, TxOut)>::new())).collect::<BTreeMap<_, _>>();
+-	assert_eq!(canonical_payees.len(), expected_payees.len());
+-	for height in scan_height + 1..=core.get_block_count().unwrap() {
+-		for tx in core.get_block(&core.get_block_hash(height).unwrap()).unwrap().txdata {
+-			// The selected cut alone cannot exclude an extra payment funded
+-			// from elsewhere. Observe every canonical transaction first.
+-			for (vout, output) in tx.output.iter().enumerate() {
+-				if let Some(found) = canonical_payees.get_mut(&output.script_pubkey) {
+-					found.push((OutPoint::new(tx.compute_txid(), vout as u32), output.clone()));
+-				}
+-			}
+-			if !tx.input.iter().any(|input| cut.contains_key(&input.previous_output)) { continue; }
+-			let mut amount = Amount::ZERO;
+-			for input in &tx.input {
+-				assert!(spent.insert(input.previous_output));
+-				amount += cut.remove(&input.previous_output).expect("selected graph consumed undeclared outside funds").value;
+-			}
+-			let txid = tx.compute_txid();
+-			fees += amount.checked_sub(tx.output.iter().map(|output| output.value).sum::<Amount>()).unwrap();
+-			for (vout, output) in tx.output.iter().enumerate() {
+-				let point = OutPoint::new(txid, vout as u32);
+-				assert!(all_points.insert(point));
+-				assert!(cut.insert(point, output.clone()).is_none());
+-			}
+-			assert!(graph.insert(txid, tx).is_none());
+-		}
+-	}
+-	assert!(roots.keys().all(|point| spent.contains(point)));
+-	for epoch in epochs {
+-		for (txid, tx) in epoch.parents.iter().chain(&epoch.children) { assert_eq!(graph.get(txid), Some(tx)); }
+-	}
+-	for (script, expected) in expected_payees {
+-		let outputs = graph.values().flat_map(|tx| tx.output.iter().enumerate().filter_map(move |(vout, output)|
+-			(&output.script_pubkey == script).then_some((OutPoint::new(tx.compute_txid(), vout as u32), output))
+-		)).collect::<Vec<_>>();
+-		if let Some(value) = expected {
+-			assert_eq!(outputs.len(), 1);
+-			assert_eq!(outputs[0].1.value, sat(*value));
+-			assert!(cut.contains_key(&outputs[0].0));
+-		} else { assert!(outputs.is_empty(), "a forfeited or transferred source cannot obtain a payout"); }
+-		let global = &canonical_payees[script];
+-		assert_eq!(global.len(), outputs.len(), "whole-chain payee outputs must equal the selected economic cut");
+-		if !global.is_empty() {
+-			assert_eq!(global[0].0, outputs[0].0);
+-			assert_eq!(&global[0].1, outputs[0].1);
+-		}
+-	}
+-	let operator = {
+-		let config = srv.watchmand().config();
+-		config.sweep_address.clone().unwrap().require_network(config.network).unwrap().script_pubkey()
+-	};
+-	let needed_watch = cut.iter().filter(|(_, output)| output.value > Amount::ZERO
+-		&& output.script_pubkey != operator && expected_payees.iter().all(|(script, _)| output.script_pubkey != *script))
+-		.map(|(point, _)| *point).collect::<BTreeSet<_>>();
+-	tokio::time::timeout(Duration::from_secs(10), async {
+-		loop {
+-			if needed_watch.is_subset(&watch_coins(srv).await) { break; }
+-			tokio::time::sleep(Duration::from_millis(50)).await;
+-		}
+-	}).await.expect("actual child change and unused sponsors remain in the real watchman wallet");
+-	let mut retained = Amount::ZERO;
+-	for (point, expected) in &cut {
+-		if expected.value == Amount::ZERO { continue; }
+-		let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+-		assert!(actual.confirmations >= 6);
+-		assert_eq!(actual.value, expected.value);
+-		assert_eq!(actual.script_pub_key.script().unwrap(), expected.script_pubkey);
+-		retained += actual.value;
+-	}
+-	assert_eq!(retained + fees, initial);
+-	for txid in core.get_raw_mempool().unwrap() {
+-		let tx = core.get_raw_transaction(&txid, None).unwrap();
+-		assert!(tx.input.iter().all(|input| !cut.contains_key(&input.previous_output)), "no selected terminal value may be pending-spent");
+-		assert!(tx.output.iter().all(|output| expected_payees.iter().all(|(script, _)| output.script_pubkey != *script)),
+-			"no old, revived or duplicate customer output may await confirmation");
+-	}
+-	let anchors = roots.keys().map(ToString::to_string).collect::<Vec<_>>();
+-	let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id FROM expiry_allocation_coin c \
+-		JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN expiry_allocation a ON a.id=c.allocation_id \
+-		JOIN vtxo v ON v.vtxo_id=e.vtxo_id WHERE v.anchor_point=ANY($1) AND c.disposition='customer'",
+-		&[&anchors]).await?)).await.unwrap();
+-	assert!(!rows.is_empty(), "the final owner must have a non-vacuous customer allocation");
+-	assert_eq!(rows.iter().map(|row| row.get::<_, &str>("vtxo_id").parse::<VtxoId>().unwrap()).collect::<BTreeSet<_>>(), *expected_ids);
+-	json!({"selected_input_sat": initial.to_sat(), "remaining_sat": retained.to_sat(), "actual_graph_miner_fee_sat": fees.to_sat(),
+-		"roots": roots.iter().map(|(point, output)| json!({"outpoint": point, "amount_sat": output.value.to_sat(),
+-			"script": output.script_pubkey.as_bytes().to_lower_hex_string()})).collect::<Vec<_>>(),
+-		"sponsors": sponsors.iter().map(|(point, output)| json!({"outpoint": point, "amount_sat": output.value.to_sat(),
+-			"script": output.script_pubkey.as_bytes().to_lower_hex_string()})).collect::<Vec<_>>(),
+-		"expected_payees": expected_payees.iter().map(|(script, amount)| json!({"script": script.as_bytes().to_lower_hex_string(),
+-			"expected_amount_sat": amount})).collect::<Vec<_>>(),
+-		"canonical_packages": epochs.iter().flat_map(|epoch| epoch.packages.iter()).collect::<Vec<_>>(),
+-		"canonical_payee_outputs": canonical_payees.iter().flat_map(|(script, outputs)| outputs.iter().map(move |(point, output)|
+-			json!({"outpoint": point, "amount_sat": output.value.to_sat(), "script": script.as_bytes().to_lower_hex_string()}))).collect::<Vec<_>>(),
+-		"terminal_utxos": cut.iter().filter(|(_, output)| output.value > Amount::ZERO).map(|(point, output)|
+-			json!({"outpoint": point, "amount_sat": output.value.to_sat(), "script": output.script_pubkey.as_bytes().to_lower_hex_string()})).collect::<Vec<_>>(),
+-		"graph_txids": graph.keys().map(ToString::to_string).collect::<Vec<_>>(),
+-		"all_graph_outpoints": all_points.iter().map(ToString::to_string).collect::<Vec<_>>(),
+-		"operator_configured_script": operator.as_bytes().to_lower_hex_string(), "confirmed_watch_owned_terminal_points": needed_watch})
+-}
+ 
+ #[derive(Clone, Copy)]
+ enum Family { P2pkh, P2sh, P2wpkh, P2wsh, P2tr }
+diff --git a/testing/tests/server/expiry_test.rs b/testing/tests/server/expiry_test.rs
+new file mode 100644
+index 000000000..0275a5af4
+--- /dev/null
++++ b/testing/tests/server/expiry_test.rs
+@@ -0,0 +1,181 @@
++//! Shared canonical-chain assertions for expiry payout scenarios.
++
++use std::collections::{BTreeMap, BTreeSet};
++use std::str::FromStr;
++use std::time::Duration;
++
++use ark::VtxoId;
++use ark_testing::{sat, Captaind, TestContext};
++use ark_testing::daemon::captaind::WalletAdminClient;
++use bitcoin::{Amount, BlockHash, OutPoint, ScriptBuf, Transaction, Txid, TxOut};
++use bitcoin::hex::DisplayHex;
++use bitcoin_ext::BlockRef;
++use bitcoin_ext::rpc::RpcApi;
++use serde_json::json;
++use server::database::Db;
++use server_rpc::protos;
++
++pub(super) fn fields(balance: &bark::Balance) -> [Amount; 10] {
++	[balance.spendable, balance.needs_refresh, balance.pending_lightning_send,
++		balance.claimable_lightning_receive, balance.pending_in_round, balance.pending_exit,
++		balance.pending_board, balance.pending_arkoor_send, balance.pending_offboard,
++		balance.awaiting_settlement]
++}
++
++pub(super) async fn rebuilt(ctx: &TestContext, srv: &Captaind, db: &Db) {
++	let height = bitcoin_ext::BlockHeight::new(u32::try_from(ctx.bitcoind().get_block_count().await).unwrap());
++	srv.wait_for_sync_height(height).await;
++	srv.watchmand().wait_for_sync_height(height).await;
++	let point = BlockRef { height, hash: ctx.bitcoind().sync_client().get_best_block_hash().unwrap() };
++	tokio::time::timeout(Duration::from_secs(15), async {
++		loop {
++			if db.read(async |tx| {
++				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
++				Ok(view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
++			}).await.unwrap() { break; }
++			tokio::time::sleep(Duration::from_millis(50)).await;
++		}
++	}).await.expect("both completed expiry views must bind the real Core tip");
++}
++
++pub(super) async fn actual_fee(ctx: &TestContext, transaction: &Transaction) -> Amount {
++	let mut total = Amount::ZERO;
++	let mut seen = BTreeSet::new();
++	for input in &transaction.input {
++		assert!(seen.insert(input.previous_output));
++		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
++		total += previous.output[input.previous_output.vout as usize].value;
++	}
++	total.checked_sub(transaction.output.iter().map(|output| output.value).sum::<Amount>()).unwrap()
++}
++
++pub(super) async fn watch_coins(srv: &Captaind) -> BTreeSet<OutPoint> {
++	let address = srv.watchmand().config().admin_address.unwrap();
++	let mut rpc = WalletAdminClient::connect(format!("http://{address}")).await.unwrap();
++	rpc.wallet_status(protos::Empty {}).await.unwrap().into_inner().watchman.unwrap()
++		.confirmed_utxos.into_iter().map(|point| OutPoint::from_str(&point).unwrap()).collect()
++}
++
++pub(super) struct Epoch {
++	pub(super) parents: BTreeMap<Txid, Transaction>,
++	pub(super) children: BTreeMap<Txid, Transaction>,
++	pub(super) allocations: BTreeMap<VtxoId, i64>,
++	pub(super) outputs: BTreeMap<VtxoId, Option<OutPoint>>,
++	pub(super) hashes: BTreeMap<Txid, BlockHash>,
++	pub(super) heights: BTreeMap<Txid, bitcoin_ext::BlockHeight>,
++	pub(super) packages: Vec<serde_json::Value>,
++}
++
++pub(super) async fn financial_cut(
++	ctx: &TestContext, srv: &Captaind, db: &Db, scan_height: u64,
++	roots: &BTreeMap<OutPoint, TxOut>, sponsors: &BTreeMap<OutPoint, TxOut>,
++	epochs: &[&Epoch], expected_payees: &[(ScriptBuf, Option<u64>)], expected_ids: &BTreeSet<VtxoId>,
++) -> serde_json::Value {
++	let core = ctx.bitcoind().sync_client();
++	let mut cut = sponsors.clone();
++	for (point, output) in roots { assert!(cut.insert(*point, output.clone()).is_none()); }
++	let initial = cut.values().map(|output| output.value).sum::<Amount>();
++	let mut graph = BTreeMap::new();
++	let mut spent = BTreeSet::new();
++	let mut all_points = cut.keys().copied().collect::<BTreeSet<_>>();
++	let mut fees = Amount::ZERO;
++	let mut canonical_payees = expected_payees.iter().map(|(script, _)|
++		(script.clone(), Vec::<(OutPoint, TxOut)>::new())).collect::<BTreeMap<_, _>>();
++	assert_eq!(canonical_payees.len(), expected_payees.len());
++	for height in scan_height + 1..=core.get_block_count().unwrap() {
++		for tx in core.get_block(&core.get_block_hash(height).unwrap()).unwrap().txdata {
++			// The selected cut alone cannot exclude an extra payment funded
++			// from elsewhere. Observe every canonical transaction first.
++			for (vout, output) in tx.output.iter().enumerate() {
++				if let Some(found) = canonical_payees.get_mut(&output.script_pubkey) {
++					found.push((OutPoint::new(tx.compute_txid(), vout as u32), output.clone()));
++				}
++			}
++			if !tx.input.iter().any(|input| cut.contains_key(&input.previous_output)) { continue; }
++			let mut amount = Amount::ZERO;
++			for input in &tx.input {
++				assert!(spent.insert(input.previous_output));
++				amount += cut.remove(&input.previous_output).expect("selected graph consumed undeclared outside funds").value;
++			}
++			let txid = tx.compute_txid();
++			fees += amount.checked_sub(tx.output.iter().map(|output| output.value).sum::<Amount>()).unwrap();
++			for (vout, output) in tx.output.iter().enumerate() {
++				let point = OutPoint::new(txid, vout as u32);
++				assert!(all_points.insert(point));
++				assert!(cut.insert(point, output.clone()).is_none());
++			}
++			assert!(graph.insert(txid, tx).is_none());
++		}
++	}
++	assert!(roots.keys().all(|point| spent.contains(point)));
++	for epoch in epochs {
++		for (txid, tx) in epoch.parents.iter().chain(&epoch.children) { assert_eq!(graph.get(txid), Some(tx)); }
++	}
++	for (script, expected) in expected_payees {
++		let outputs = graph.values().flat_map(|tx| tx.output.iter().enumerate().filter_map(move |(vout, output)|
++			(&output.script_pubkey == script).then_some((OutPoint::new(tx.compute_txid(), vout as u32), output))
++		)).collect::<Vec<_>>();
++		if let Some(value) = expected {
++			assert_eq!(outputs.len(), 1);
++			assert_eq!(outputs[0].1.value, sat(*value));
++			assert!(cut.contains_key(&outputs[0].0));
++		} else { assert!(outputs.is_empty(), "a forfeited or transferred source cannot obtain a payout"); }
++		let global = &canonical_payees[script];
++		assert_eq!(global.len(), outputs.len(), "whole-chain payee outputs must equal the selected economic cut");
++		if !global.is_empty() {
++			assert_eq!(global[0].0, outputs[0].0);
++			assert_eq!(&global[0].1, outputs[0].1);
++		}
++	}
++	let operator = {
++		let config = srv.watchmand().config();
++		config.sweep_address.clone().unwrap().require_network(config.network).unwrap().script_pubkey()
++	};
++	let needed_watch = cut.iter().filter(|(_, output)| output.value > Amount::ZERO
++		&& output.script_pubkey != operator && expected_payees.iter().all(|(script, _)| output.script_pubkey != *script))
++		.map(|(point, _)| *point).collect::<BTreeSet<_>>();
++	tokio::time::timeout(Duration::from_secs(10), async {
++		loop {
++			if needed_watch.is_subset(&watch_coins(srv).await) { break; }
++			tokio::time::sleep(Duration::from_millis(50)).await;
++		}
++	}).await.expect("actual child change and unused sponsors remain in the real watchman wallet");
++	let mut retained = Amount::ZERO;
++	for (point, expected) in &cut {
++		if expected.value == Amount::ZERO { continue; }
++		let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
++		assert!(actual.confirmations >= 6);
++		assert_eq!(actual.value, expected.value);
++		assert_eq!(actual.script_pub_key.script().unwrap(), expected.script_pubkey);
++		retained += actual.value;
++	}
++	assert_eq!(retained + fees, initial);
++	for txid in core.get_raw_mempool().unwrap() {
++		let tx = core.get_raw_transaction(&txid, None).unwrap();
++		assert!(tx.input.iter().all(|input| !cut.contains_key(&input.previous_output)), "no selected terminal value may be pending-spent");
++		assert!(tx.output.iter().all(|output| expected_payees.iter().all(|(script, _)| output.script_pubkey != *script)),
++			"no old, revived or duplicate customer output may await confirmation");
++	}
++	let anchors = roots.keys().map(ToString::to_string).collect::<Vec<_>>();
++	let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id FROM expiry_allocation_coin c \
++		JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN expiry_allocation a ON a.id=c.allocation_id \
++		JOIN vtxo v ON v.vtxo_id=e.vtxo_id WHERE v.anchor_point=ANY($1) AND c.disposition='customer'",
++		&[&anchors]).await?)).await.unwrap();
++	assert!(!rows.is_empty(), "the final owner must have a non-vacuous customer allocation");
++	assert_eq!(rows.iter().map(|row| row.get::<_, &str>("vtxo_id").parse::<VtxoId>().unwrap()).collect::<BTreeSet<_>>(), *expected_ids);
++	json!({"selected_input_sat": initial.to_sat(), "remaining_sat": retained.to_sat(), "actual_graph_miner_fee_sat": fees.to_sat(),
++		"roots": roots.iter().map(|(point, output)| json!({"outpoint": point, "amount_sat": output.value.to_sat(),
++			"script": output.script_pubkey.as_bytes().to_lower_hex_string()})).collect::<Vec<_>>(),
++		"sponsors": sponsors.iter().map(|(point, output)| json!({"outpoint": point, "amount_sat": output.value.to_sat(),
++			"script": output.script_pubkey.as_bytes().to_lower_hex_string()})).collect::<Vec<_>>(),
++		"expected_payees": expected_payees.iter().map(|(script, amount)| json!({"script": script.as_bytes().to_lower_hex_string(),
++			"expected_amount_sat": amount})).collect::<Vec<_>>(),
++		"canonical_packages": epochs.iter().flat_map(|epoch| epoch.packages.iter()).collect::<Vec<_>>(),
++		"canonical_payee_outputs": canonical_payees.iter().flat_map(|(script, outputs)| outputs.iter().map(move |(point, output)|
++			json!({"outpoint": point, "amount_sat": output.value.to_sat(), "script": script.as_bytes().to_lower_hex_string()}))).collect::<Vec<_>>(),
++		"terminal_utxos": cut.iter().filter(|(_, output)| output.value > Amount::ZERO).map(|(point, output)|
++			json!({"outpoint": point, "amount_sat": output.value.to_sat(), "script": output.script_pubkey.as_bytes().to_lower_hex_string()})).collect::<Vec<_>>(),
++		"graph_txids": graph.keys().map(ToString::to_string).collect::<Vec<_>>(),
++		"all_graph_outpoints": all_points.iter().map(ToString::to_string).collect::<Vec<_>>(),
++		"operator_configured_script": operator.as_bytes().to_lower_hex_string(), "confirmed_watch_owned_terminal_points": needed_watch})
++}
+diff --git a/testing/tests/server/expiry_three_owner_forwarding.rs b/testing/tests/server/expiry_three_owner_forwarding.rs
+index 4f9c47f80..d3c690b1d 100644
+--- a/testing/tests/server/expiry_three_owner_forwarding.rs
++++ b/testing/tests/server/expiry_three_owner_forwarding.rs
+@@ -1,7 +1,8 @@
+ //! Two full-value sends leave one final owner's fallback claim.
+ 
++use super::expiry_test::{fields, rebuilt, actual_fee, Epoch, financial_cut};
++
+ use std::collections::{BTreeMap, BTreeSet};
+-use std::str::FromStr;
+ use std::time::Duration;
+ 
+ use ark::attestations::VtxoStatusAttestation;
+@@ -9,26 +10,18 @@ use ark::mailbox::MailboxIdentifier;
+ use ark::{ProtocolEncoding, Vtxo, VtxoId};
+ use ark::vtxo::Full;
+ use ark_testing::{require_bitcoind_chain_source, sat, Captaind, TestContext};
+-use ark_testing::daemon::captaind::WalletAdminClient;
+ use bark::{Wallet};
+ use bark::movement::{Movement, MovementStatus, PaymentMethod};
+ use bark::vtxo::VtxoState;
+-use bitcoin::{Amount, BlockHash, Network, OutPoint, ScriptBuf, Transaction, Txid, TxOut};
++use bitcoin::{Amount, Network, OutPoint, ScriptBuf, Transaction, TxOut};
+ use bitcoin::consensus::deserialize;
+ use bitcoin::hex::DisplayHex;
+-use bitcoin_ext::{BlockDelta, BlockRef, TxOutExt};
++use bitcoin_ext::{BlockDelta, TxOutExt};
+ use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
+ use serde_json::json;
+ use server::database::Db;
+ use server_rpc::protos;
+ 
+-fn fields(balance: &bark::Balance) -> [Amount; 10] {
+-	[balance.spendable, balance.needs_refresh, balance.pending_lightning_send,
+-		balance.claimable_lightning_receive, balance.pending_in_round, balance.pending_exit,
+-		balance.pending_board, balance.pending_arkoor_send, balance.pending_offboard,
+-		balance.awaiting_settlement]
+-}
+-
+ async fn balances(wallet: &Wallet, spendable: Amount) {
+ 	let mut expected = [Amount::ZERO; 10];
+ 	expected[0] = spendable;
+@@ -37,40 +30,6 @@ async fn balances(wallet: &Wallet, spendable: Amount) {
+ 		"no live or finished unilateral exit may claim the forfeited principal");
+ }
+ 
+-async fn rebuilt(ctx: &TestContext, srv: &Captaind, db: &Db) {
+-	let height = bitcoin_ext::BlockHeight::new(u32::try_from(ctx.bitcoind().get_block_count().await).unwrap());
+-	srv.wait_for_sync_height(height).await;
+-	srv.watchmand().wait_for_sync_height(height).await;
+-	let point = BlockRef { height, hash: ctx.bitcoind().sync_client().get_best_block_hash().unwrap() };
+-	tokio::time::timeout(Duration::from_secs(15), async {
+-		loop {
+-			if db.read(async |tx| {
+-				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
+-				Ok(view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+-			}).await.unwrap() { break; }
+-			tokio::time::sleep(Duration::from_millis(50)).await;
+-		}
+-	}).await.expect("both completed expiry views must bind the real Core tip");
+-}
+-
+-async fn actual_fee(ctx: &TestContext, transaction: &Transaction) -> Amount {
+-	let mut total = Amount::ZERO;
+-	let mut seen = BTreeSet::new();
+-	for input in &transaction.input {
+-		assert!(seen.insert(input.previous_output));
+-		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+-		total += previous.output[input.previous_output.vout as usize].value;
+-	}
+-	total.checked_sub(transaction.output.iter().map(|output| output.value).sum::<Amount>()).unwrap()
+-}
+-
+-async fn watch_coins(srv: &Captaind) -> BTreeSet<OutPoint> {
+-	let address = srv.watchmand().config().admin_address.unwrap();
+-	let mut rpc = WalletAdminClient::connect(format!("http://{address}")).await.unwrap();
+-	rpc.wallet_status(protos::Empty {}).await.unwrap().into_inner().watchman.unwrap()
+-		.confirmed_utxos.into_iter().map(|point| OutPoint::from_str(&point).unwrap()).collect()
+-}
+-
+ #[derive(Clone)]
+ struct ExpectedLeaf {
+ 	coin: Vtxo<Full>,
+@@ -81,16 +40,6 @@ struct ExpectedLeaf {
+ 	forfeited: u64,
+ }
+ 
+-struct Epoch {
+-	parents: BTreeMap<Txid, Transaction>,
+-	children: BTreeMap<Txid, Transaction>,
+-	allocations: BTreeMap<VtxoId, i64>,
+-	outputs: BTreeMap<VtxoId, Option<OutPoint>>,
+-	hashes: BTreeMap<Txid, BlockHash>,
+-	heights: BTreeMap<Txid, bitcoin_ext::BlockHeight>,
+-	packages: Vec<serde_json::Value>,
+-}
+-
+ async fn confirm_epoch(
+ 	ctx: &TestContext, srv: &Captaind, db: &Db, leaves: &[ExpectedLeaf], start: u64,
+ ) -> Epoch {
+@@ -242,119 +191,6 @@ fn history(current: Vec<Movement>, baseline: &[Movement], leaves: &[&ExpectedLea
+ 
+ /// Canonical block-order reconstruction permits only the declared roots and
+ /// sponsors; historical branches are never added again as external principal.
+-async fn financial_cut(
+-	ctx: &TestContext, srv: &Captaind, db: &Db, scan_height: u64,
+-	roots: &BTreeMap<OutPoint, TxOut>, sponsors: &BTreeMap<OutPoint, TxOut>,
+-	epochs: &[&Epoch], expected_payees: &[(ScriptBuf, Option<u64>)], expected_ids: &BTreeSet<VtxoId>,
+-) -> serde_json::Value {
+-	let core = ctx.bitcoind().sync_client();
+-	let mut cut = sponsors.clone();
+-	for (point, output) in roots { assert!(cut.insert(*point, output.clone()).is_none()); }
+-	let initial = cut.values().map(|output| output.value).sum::<Amount>();
+-	let mut graph = BTreeMap::new();
+-	let mut spent = BTreeSet::new();
+-	let mut all_points = cut.keys().copied().collect::<BTreeSet<_>>();
+-	let mut fees = Amount::ZERO;
+-	let mut canonical_payees = expected_payees.iter().map(|(script, _)|
+-		(script.clone(), Vec::<(OutPoint, TxOut)>::new())).collect::<BTreeMap<_, _>>();
+-	assert_eq!(canonical_payees.len(), expected_payees.len());
+-	for height in scan_height + 1..=core.get_block_count().unwrap() {
+-		for tx in core.get_block(&core.get_block_hash(height).unwrap()).unwrap().txdata {
+-			// The selected cut alone cannot exclude an extra payment funded
+-			// from elsewhere. Observe every canonical transaction first.
+-			for (vout, output) in tx.output.iter().enumerate() {
+-				if let Some(found) = canonical_payees.get_mut(&output.script_pubkey) {
+-					found.push((OutPoint::new(tx.compute_txid(), vout as u32), output.clone()));
+-				}
+-			}
+-			if !tx.input.iter().any(|input| cut.contains_key(&input.previous_output)) { continue; }
+-			let mut amount = Amount::ZERO;
+-			for input in &tx.input {
+-				assert!(spent.insert(input.previous_output));
+-				amount += cut.remove(&input.previous_output).expect("selected graph consumed undeclared outside funds").value;
+-			}
+-			let txid = tx.compute_txid();
+-			fees += amount.checked_sub(tx.output.iter().map(|output| output.value).sum::<Amount>()).unwrap();
+-			for (vout, output) in tx.output.iter().enumerate() {
+-				let point = OutPoint::new(txid, vout as u32);
+-				assert!(all_points.insert(point));
+-				assert!(cut.insert(point, output.clone()).is_none());
+-			}
+-			assert!(graph.insert(txid, tx).is_none());
+-		}
+-	}
+-	assert!(roots.keys().all(|point| spent.contains(point)));
+-	for epoch in epochs {
+-		for (txid, tx) in epoch.parents.iter().chain(&epoch.children) { assert_eq!(graph.get(txid), Some(tx)); }
+-	}
+-	for (script, expected) in expected_payees {
+-		let outputs = graph.values().flat_map(|tx| tx.output.iter().enumerate().filter_map(move |(vout, output)|
+-			(&output.script_pubkey == script).then_some((OutPoint::new(tx.compute_txid(), vout as u32), output))
+-		)).collect::<Vec<_>>();
+-		if let Some(value) = expected {
+-			assert_eq!(outputs.len(), 1);
+-			assert_eq!(outputs[0].1.value, sat(*value));
+-			assert!(cut.contains_key(&outputs[0].0));
+-		} else { assert!(outputs.is_empty(), "a forfeited or transferred source cannot obtain a payout"); }
+-		let global = &canonical_payees[script];
+-		assert_eq!(global.len(), outputs.len(), "whole-chain payee outputs must equal the selected economic cut");
+-		if !global.is_empty() {
+-			assert_eq!(global[0].0, outputs[0].0);
+-			assert_eq!(&global[0].1, outputs[0].1);
+-		}
+-	}
+-	let operator = {
+-		let config = srv.watchmand().config();
+-		config.sweep_address.clone().unwrap().require_network(config.network).unwrap().script_pubkey()
+-	};
+-	let needed_watch = cut.iter().filter(|(_, output)| output.value > Amount::ZERO
+-		&& output.script_pubkey != operator && expected_payees.iter().all(|(script, _)| output.script_pubkey != *script))
+-		.map(|(point, _)| *point).collect::<BTreeSet<_>>();
+-	tokio::time::timeout(Duration::from_secs(10), async {
+-		loop {
+-			if needed_watch.is_subset(&watch_coins(srv).await) { break; }
+-			tokio::time::sleep(Duration::from_millis(50)).await;
+-		}
+-	}).await.expect("actual child change and unused sponsors remain in the real watchman wallet");
+-	let mut retained = Amount::ZERO;
+-	for (point, expected) in &cut {
+-		if expected.value == Amount::ZERO { continue; }
+-		let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+-		assert!(actual.confirmations >= 6);
+-		assert_eq!(actual.value, expected.value);
+-		assert_eq!(actual.script_pub_key.script().unwrap(), expected.script_pubkey);
+-		retained += actual.value;
+-	}
+-	assert_eq!(retained + fees, initial);
+-	for txid in core.get_raw_mempool().unwrap() {
+-		let tx = core.get_raw_transaction(&txid, None).unwrap();
+-		assert!(tx.input.iter().all(|input| !cut.contains_key(&input.previous_output)), "no selected terminal value may be pending-spent");
+-		assert!(tx.output.iter().all(|output| expected_payees.iter().all(|(script, _)| output.script_pubkey != *script)),
+-			"no old, revived or duplicate customer output may await confirmation");
+-	}
+-	let anchors = roots.keys().map(ToString::to_string).collect::<Vec<_>>();
+-	let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id FROM expiry_allocation_coin c \
+-		JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN expiry_allocation a ON a.id=c.allocation_id \
+-		JOIN vtxo v ON v.vtxo_id=e.vtxo_id WHERE v.anchor_point=ANY($1) AND c.disposition='customer'",
+-		&[&anchors]).await?)).await.unwrap();
+-	assert!(!rows.is_empty(), "the final owner must have a non-vacuous customer allocation");
+-	assert_eq!(rows.iter().map(|row| row.get::<_, &str>("vtxo_id").parse::<VtxoId>().unwrap()).collect::<BTreeSet<_>>(), *expected_ids);
+-	json!({"selected_input_sat": initial.to_sat(), "remaining_sat": retained.to_sat(), "actual_graph_miner_fee_sat": fees.to_sat(),
+-		"roots": roots.iter().map(|(point, output)| json!({"outpoint": point, "amount_sat": output.value.to_sat(),
+-			"script": output.script_pubkey.as_bytes().to_lower_hex_string()})).collect::<Vec<_>>(),
+-		"sponsors": sponsors.iter().map(|(point, output)| json!({"outpoint": point, "amount_sat": output.value.to_sat(),
+-			"script": output.script_pubkey.as_bytes().to_lower_hex_string()})).collect::<Vec<_>>(),
+-		"expected_payees": expected_payees.iter().map(|(script, amount)| json!({"script": script.as_bytes().to_lower_hex_string(),
+-			"expected_amount_sat": amount})).collect::<Vec<_>>(),
+-		"canonical_packages": epochs.iter().flat_map(|epoch| epoch.packages.iter()).collect::<Vec<_>>(),
+-		"canonical_payee_outputs": canonical_payees.iter().flat_map(|(script, outputs)| outputs.iter().map(move |(point, output)|
+-			json!({"outpoint": point, "amount_sat": output.value.to_sat(), "script": script.as_bytes().to_lower_hex_string()}))).collect::<Vec<_>>(),
+-		"terminal_utxos": cut.iter().filter(|(_, output)| output.value > Amount::ZERO).map(|(point, output)|
+-			json!({"outpoint": point, "amount_sat": output.value.to_sat(), "script": output.script_pubkey.as_bytes().to_lower_hex_string()})).collect::<Vec<_>>(),
+-		"graph_txids": graph.keys().map(ToString::to_string).collect::<Vec<_>>(),
+-		"all_graph_outpoints": all_points.iter().map(ToString::to_string).collect::<Vec<_>>(),
+-		"operator_configured_script": operator.as_bytes().to_lower_hex_string(), "confirmed_watch_owned_terminal_points": needed_watch})
+-}
+ 
+ /// A full-value SDK send must really register, deliver, and finalize before
+ /// its recipient can forward. The RPC proof is signed proof,
+diff --git a/testing/tests/server/fallback.rs b/testing/tests/server/fallback.rs
+index 11e104562..c0998cb20 100644
+--- a/testing/tests/server/fallback.rs
++++ b/testing/tests/server/fallback.rs
+@@ -7,112 +7,27 @@ use bitcoin::{Network, ScriptBuf};
+ use server_rpc::protos;
+ use std::time::Duration;
+ 
+-async fn wait_for_migration_lock(client: &tokio_postgres::Client, granted: bool, count: i64) {
+-	tokio::time::timeout(std::time::Duration::from_secs(15), async {
+-		loop {
+-			let found = client.query_one("SELECT COUNT(*) FROM pg_locks WHERE locktype='advisory' \
+-				AND classid=0 AND objid=4 AND objsubid=1 AND granted=$1 \
+-				AND database=(SELECT oid FROM pg_database WHERE datname=current_database())", &[&granted])
+-				.await.unwrap().get::<_, i64>(0);
+-			if found == count { break; }
+-			tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+-		}
+-	}).await.unwrap_or_else(|_| panic!("migration lock boundary timed out: granted={granted}, count={count}"));
+-}
+-
+-async fn remove_fork_schema(client: &tokio_postgres::Client) {
+-	let tables = client.query("SELECT tablename FROM pg_tables WHERE schemaname='public' \
+-		AND (LEFT(tablename, 7)='expiry_' OR tablename='fallback_record')", &[]).await.unwrap();
+-	for table in tables {
+-		let name: &str = table.get(0);
+-		client.batch_execute(&format!("DROP TABLE IF EXISTS \"{}\" CASCADE", name.replace('"', "\"\""))).await.unwrap();
+-	}
+-	client.batch_execute("DROP INDEX expiry_vtxo_anchor_point_ix;").await.unwrap();
+-}
+-
+ #[tokio::test]
+-async fn fallback_concurrent_initialization_preserves_upstream_history() {
+-	let mut ctx = TestContext::new_minimal("postgresd/fallback_concurrent_initialization_preserves_upstream_history").await;
++async fn fallback_fresh_schema_reopens_concurrently_without_resetting_state() {
++	let mut ctx = TestContext::new_minimal("postgresd/fallback_fresh_schema_reopen").await;
+ 	ctx.init_central_postgres().await;
+ 	let config = ctx.new_postgres(&ctx.test_name).await;
+-	server::database::Db::create(&config).await.unwrap();
++	let db = server::database::Db::create(&config).await.unwrap();
++	db.write(async |tx| tx.invalidate_expiry_chain(bitcoin_ext::BlockHeight::ZERO).await).await.unwrap();
+ 	let client = ctx.postgres_manager().database_client(Some(&config.name)).await;
+-	let before = client.query("SELECT version, checksum FROM refinery_schema_history ORDER BY version", &[]).await.unwrap()
++	let history = client.query("SELECT version, checksum FROM refinery_schema_history ORDER BY version", &[]).await.unwrap()
+ 		.into_iter().map(|r| (r.get::<_, i32>(0), r.get::<_, String>(1))).collect::<Vec<_>>();
+-	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0), 1);
+-	// Simulate the real upstream-to-fork deployment, not an already migrated
+-	// fixture. There are no coins or financial decisions in this database.
+-	remove_fork_schema(&client).await;
+-	client.batch_execute("SELECT pg_advisory_lock(4::BIGINT);").await.unwrap();
+-	let first_config = config.clone();
+-	let first = tokio::spawn(async move { server::database::Db::connect(&first_config).await });
+-	let second = tokio::spawn(async move { server::database::Db::connect(&config).await });
+-	// Both real startup connections must wait before schema initialization.
+-	wait_for_migration_lock(&client, false, 2).await;
+-	assert!(!first.is_finished() && !second.is_finished());
+-	client.query_one("SELECT pg_advisory_unlock(4::BIGINT)", &[]).await.unwrap();
+-	let (first, second) = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+-		tokio::join!(first, second)
+-	}).await.expect("concurrent initialization did not finish");
+-	drop(first.unwrap().expect("first startup must initialize successfully"));
+-	drop(second.unwrap().expect("second startup must reuse the initialized schema"));
++	assert_eq!(history.iter().filter(|(version, _)| *version == 73).count(), 1);
++	assert_eq!(history.last().unwrap().0, 73);
++	let generation = client.query_one("SELECT generation FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0);
++	assert!(generation > 0);
++	let (first, second) = tokio::join!(server::database::Db::connect(&config), server::database::Db::connect(&config));
++	drop(first.unwrap());
++	drop(second.unwrap());
++	assert_eq!(client.query_one("SELECT generation FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0), generation);
+ 	let after = client.query("SELECT version, checksum FROM refinery_schema_history ORDER BY version", &[]).await.unwrap()
+ 		.into_iter().map(|r| (r.get::<_, i32>(0), r.get::<_, String>(1))).collect::<Vec<_>>();
+-	assert_eq!(before, after, "fork startup must not rewrite upstream checksums");
+-	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0), 1);
+-	assert!(client.query_one("SELECT to_regclass('expiry_refinery_schema_history') IS NULL", &[]).await.unwrap().get::<_, bool>(0));
+-	wait_for_migration_lock(&client, true, 0).await;
+-}
+-
+-#[tokio::test]
+-async fn fallback_cancelled_migration_releases_its_session_lock() {
+-	let mut ctx = TestContext::new_minimal("postgresd/fallback_cancelled_migration_releases_its_session_lock").await;
+-	ctx.init_central_postgres().await;
+-	let config = ctx.new_postgres(&ctx.test_name).await;
+-	server::database::Db::create(&config).await.unwrap();
+-	let client = ctx.postgres_manager().database_client(Some(&config.name)).await;
+-	// Stop the runner at a real history read after it acquires its session
+-	// lock. Cancelling that startup must not leave a lock on a pooled client.
+-	client.batch_execute("BEGIN; LOCK TABLE refinery_schema_history IN ACCESS EXCLUSIVE MODE;").await.unwrap();
+-	let startup_config = config.clone();
+-	let startup = tokio::spawn(async move { server::database::Db::connect(&startup_config).await });
+-	wait_for_migration_lock(&client, true, 1).await;
+-	startup.abort();
+-	let Err(cancelled) = startup.await else { panic!("startup completed before cancellation"); };
+-	assert!(cancelled.is_cancelled());
+-	wait_for_migration_lock(&client, true, 0).await;
+-	client.batch_execute("ROLLBACK").await.unwrap();
+-	drop(tokio::time::timeout(std::time::Duration::from_secs(15), server::database::Db::connect(&config))
+-		.await.expect("cancelled startup left migration lock held").unwrap());
+-	wait_for_migration_lock(&client, true, 0).await;
+-}
+-
+-#[tokio::test]
+-async fn fallback_failed_initialization_rolls_back_schema() {
+-	let mut ctx = TestContext::new_minimal("postgresd/fallback_failed_initialization_rolls_back_schema").await;
+-	ctx.init_central_postgres().await;
+-	let config = ctx.new_postgres(&ctx.test_name).await;
+-	drop(server::database::Db::create(&config).await.unwrap());
+-	let client = ctx.postgres_manager().database_client(Some(&config.name)).await;
+-	remove_fork_schema(&client).await;
+-	// An empty conflicting relation fails near the end of the schema batch.
+-	// No ownership, entitlement or payment rows are manufactured.
+-	client.batch_execute("CREATE TABLE expiry_lightning_receive_claim (id INTEGER);").await.unwrap();
+-	let Err(error) = server::database::Db::connect(&config).await else {
+-		panic!("conflicting schema object must refuse initialization");
+-	};
+-	let pg = error.downcast_ref::<tokio_postgres::Error>().expect("expected schema statement failure");
+-	let db_error = pg.as_db_error().expect("expected PostgreSQL schema error");
+-	assert_eq!(db_error.code(), &tokio_postgres::error::SqlState::DUPLICATE_TABLE);
+-	assert!(db_error.message().contains("expiry_lightning_receive_claim"));
+-	assert!(client.query_one("SELECT to_regclass('expiry_chain_view') IS NULL \
+-		AND to_regclass('fallback_record') IS NULL", &[]).await.unwrap().get::<_, bool>(0),
+-		"failed initialization must roll back its earlier tables and marker");
+-	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_lightning_receive_claim", &[]).await.unwrap().get::<_, i64>(0), 0);
+-	wait_for_migration_lock(&client, true, 0).await;
+-	client.batch_execute("DROP TABLE expiry_lightning_receive_claim;").await.unwrap();
+-	drop(server::database::Db::connect(&config).await.unwrap());
+-	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0), 1);
++	assert_eq!(after, history);
+ }
+ 
+ #[tokio::test]
+@@ -225,34 +140,6 @@ async fn fallback_registration_conflicts_do_not_block_other_mailboxes() {
+ 	}
+ }
+ 
+-#[tokio::test]
+-async fn fallback_schema_initialization_preserves_upstream_history() {
+-	let mut ctx = TestContext::new_minimal("postgresd/fallback_schema_initialization_preserves_upstream_history").await;
+-	ctx.init_central_postgres().await;
+-	let config = ctx.new_postgres(&ctx.test_name).await;
+-	server::database::Db::create(&config).await.unwrap();
+-	let client = ctx.postgres_manager().database_client(Some(&config.name)).await;
+-	let count = client.query_one("SELECT COUNT(*) FROM refinery_schema_history", &[]).await.unwrap().get::<_, i64>(0);
+-	assert!(count > 0);
+-	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0), 1);
+-	// Return the database to exactly the plain-upstream schema/history. The
+-	// fork build must add its own schema without changing an upstream checksum.
+-	remove_fork_schema(&client).await;
+-	let before = client.query("SELECT version, checksum FROM refinery_schema_history ORDER BY version", &[]).await.unwrap()
+-		.into_iter().map(|r| (r.get::<_, i32>(0), r.get::<_, String>(1))).collect::<Vec<_>>();
+-	let db = server::database::Db::connect(&config).await.unwrap();
+-	drop(db);
+-	let after = client.query("SELECT version, checksum FROM refinery_schema_history ORDER BY version", &[]).await.unwrap()
+-		.into_iter().map(|r| (r.get::<_, i32>(0), r.get::<_, String>(1))).collect::<Vec<_>>();
+-	assert_eq!(before, after);
+-	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0), 1);
+-	assert!(client.query_one("SELECT to_regclass('expiry_refinery_schema_history') IS NULL", &[]).await.unwrap().get::<_, bool>(0));
+-	client.execute("UPDATE expiry_chain_view SET generation=generation+1 WHERE id=1", &[]).await.unwrap();
+-	let generation = client.query_one("SELECT generation FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0);
+-	server::database::Db::connect(&config).await.unwrap();
+-	assert_eq!(client.query_one("SELECT generation FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0), generation);
+-}
+-
+ #[tokio::test]
+ async fn fallback_links_are_authenticated_conflict_safe_and_transactional() {
+ 	let mut ctx = TestContext::new_minimal("postgresd/fallback_links_are_authenticated_conflict_safe_and_transactional").await;
+diff --git a/testing/tests/server/lightning_receive_fallback.rs b/testing/tests/server/lightning_receive_fallback.rs
+index 0bf970ff9..0a4c03fa8 100644
+--- a/testing/tests/server/lightning_receive_fallback.rs
++++ b/testing/tests/server/lightning_receive_fallback.rs
+@@ -338,10 +338,10 @@ async fn registered_receive_fallback() {
+ 		}
+ 	}
+ 	let residuals = residuals.into_iter().map(|(outpoint, txout)| BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
+-	let partition = BackingSnapshot { roots: vec![physical_root], regular: Vec::new(), serialized_bytes: 0 }
++	BackingSnapshot { roots: vec![physical_root], regular: Vec::new() }
+ 		.check_partition(&terminals, &[shared_funding.clone()], &residuals, limits).unwrap();
+-	assert_eq!(partition.roots.len(), 1);
+-	assert_eq!(partition.roots[0].terminal_amount + partition.roots[0].anchor_residual_amount, root_value);
++	assert_eq!(terminals.iter().map(|coin| coin.amount()).sum::<Amount>()
++		+ residuals.iter().map(|residual| residual.txout.value).sum::<Amount>(), root_value);
+ 	let depth = source.exit_depth().max(unknown_source.exit_depth());
+ 	assert!(depth <= 8, "the declared fixed confirmation schedule only covers this bounded signed geometry");
+ 	let mut unknown_path = BTreeMap::from([(shared_anchor, shared_funding.output[shared_anchor.vout as usize].clone())]);
+diff --git a/testing/tests/server/mod.rs b/testing/tests/server/mod.rs
+index b091c6e11..209075c6e 100644
+--- a/testing/tests/server/mod.rs
++++ b/testing/tests/server/mod.rs
+@@ -1,3 +1,4 @@
++mod expiry_test;
+ mod expiry_partial_conflict_reorg;
+ mod expiry_failed_swap;
+ mod offboard_restart;
+@@ -973,7 +974,7 @@ async fn change_split_avoids_exit_depth_limit() {
+ 	let checks = [(&bark1, 900_000, 727_500, 172_500), (&bark2, 100_000, 60_000, 40_000)];
+ 	for (bark, total, spendable, needs_refresh) in checks {
+ 		let balance = bark.offchain_balance().await;
+-		if is_bark_version!(> "0.7.1") || bark.supports_awaiting_settlement().await {
++		if is_bark_version!(> "0.7.1") {
+ 			assert_eq!(spendable, balance.spendable.to_sat(), "{balance:?}");
+ 			assert_eq!(needs_refresh, balance.needs_refresh.to_sat(), "{balance:?}");
+ 		} else {
+diff --git a/testing/tests/server/postgres/mod.rs b/testing/tests/server/postgres/mod.rs
+index 21bdec69e..53f058832 100644
+--- a/testing/tests/server/postgres/mod.rs
++++ b/testing/tests/server/postgres/mod.rs
+@@ -73,7 +73,6 @@ async fn lightning_invoice() {
+ 
+ 	Db::create(&postgres_cfg).await.expect("Database created");
+ 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+-	super::register_vector_owners(&db).await;
+ 
+ 	let dummy_public_key = PublicKey::from_str("038f47dcd43ba6d97fc9ed2e3bba09b175a45fac55f0683e8cf771e8ced4572354")
+ 		.expect("Failed to create dummy pubkey");
+@@ -420,7 +419,6 @@ async fn block_table_independence() {
+ 
+ 	Db::create(&postgres_cfg).await.expect("Database created");
+ 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+-	super::register_vector_owners(&db).await;
+ 
+ 	// Create test blocks with different hashes at the same height
+ 	let hash_captaind = bitcoin::BlockHash::from_str("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f").unwrap();
+@@ -545,7 +543,6 @@ async fn pending_sweeps() {
+ 
+ 	Db::create(&postgres_cfg).await.expect("Database created");
+ 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+-	super::register_vector_owners(&db).await;
+ 
+ 	// Initially empty
+ 	let sweeps = db.read(async |t| t.fetch_pending_sweeps().await).await.unwrap();
+@@ -670,7 +667,6 @@ async fn nursery_txs() {
+ 
+ 	Db::create(&postgres_cfg).await.expect("Database created");
+ 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+-	super::register_vector_owners(&db).await;
+ 
+ 	let tx = Transaction {
+ 		version: bitcoin::transaction::Version::non_standard(42),
+@@ -749,7 +745,6 @@ async fn ephemeral_tweaks() {
+ 
+ 	Db::create(&postgres_cfg).await.expect("Database created");
+ 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+-	super::register_vector_owners(&db).await;
+ 
+ 	let pubkey = PublicKey::from_str(
+ 		"038f47dcd43ba6d97fc9ed2e3bba09b175a45fac55f0683e8cf771e8ced4572354"
+@@ -2123,7 +2118,6 @@ async fn get_integration_token_config() {
+ 
+ 	Db::create(&postgres_cfg).await.expect("Database created");
+ 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+-	super::register_vector_owners(&db).await;
+ 
+ 	let integration = db.write(async |t| t.store_integration("test_integration").await).await.unwrap();
+ 
+@@ -2153,7 +2147,6 @@ async fn wallet_changeset() {
+ 
+ 	Db::create(&postgres_cfg).await.expect("Database created");
+ 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+-	super::register_vector_owners(&db).await;
+ 
+ 	// Empty aggregate changeset
+ 	let cs = db.read(async |t| t.read_aggregate_changeset(WalletKind::Rounds).await).await.unwrap();
+diff --git a/testing/tests/server/recovery.rs b/testing/tests/server/recovery.rs
+index d7ecc1b68..c7922258a 100644
+--- a/testing/tests/server/recovery.rs
++++ b/testing/tests/server/recovery.rs
+@@ -218,3 +218,15 @@ async fn recover_vtxos_by_xpub_rejects_bad_requests() {
+ 	client.recover_vtxos_by_xpub(xpub_request(&xpriv, server_pubkey, 0)).await
+ 		.expect("a valid request is accepted");
+ }
++
++#[tokio::test]
++async fn recover_vtxos_by_xpub_disabled() {
++	let ctx = TestContext::new("server/recover_vtxos_by_xpub_disabled").await;
++	let srv = ctx.captaind("server").cfg(|c| c.recovery_xpub_nb_keys = 0).create().await;
++	let server_pubkey = srv.ark_info().await.server_pubkey;
++	let mut client = srv.get_public_rpc().await;
++
++	let req = xpub_request(&dummy_xpriv(NetworkKind::Test), server_pubkey, 0);
++	let err = client.recover_vtxos_by_xpub(req).await.expect_err("the rpc is disabled");
++	assert_eq!(err.code(), tonic::Code::Unimplemented, "{err:?}");
++}
+diff --git a/testing/tests/server/watchman.rs b/testing/tests/server/watchman.rs
+index f22302ce7..26d7b736d 100644
+--- a/testing/tests/server/watchman.rs
++++ b/testing/tests/server/watchman.rs
+@@ -452,7 +452,7 @@ async fn watchman_sweeps_round_vtxos() {
+ 		.expect("the common physical round root must be stored").state.vtxo;
+ 	assert_eq!(root.amount(), sat(400_000));
+ 	let selected = server::database::expiry_inventory::BackingSnapshot {
+-		roots: vec![root], regular: Vec::new(), serialized_bytes: 0,
++		roots: vec![root], regular: Vec::new(),
+ 	};
+ 	let terminals = replacements.iter().cloned().map(ark::ServerVtxo::from).collect::<Vec<_>>();
+ 	let mut residuals = BTreeMap::new();
+@@ -469,12 +469,9 @@ async fn watchman_sweeps_round_vtxos() {
+ 	}
+ 	let residuals = residuals.into_iter().map(|(outpoint, txout)|
+ 		server::database::expiry_inventory::BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
+-	let partition = selected.check_partition(&terminals, &[round_funding.clone()], &residuals, limits).unwrap();
+-	assert_eq!(partition.roots.len(), 1);
+-	assert_eq!(partition.roots[0].terminal_amount, sat(400_000));
+-	assert_eq!(partition.roots[0].anchor_residual_amount, Amount::ZERO);
+-	assert_eq!(partition.roots[0].terminals.iter().copied().collect::<BTreeSet<_>>(),
+-		replacements.iter().map(|coin| coin.id()).collect::<BTreeSet<_>>());
++	selected.check_partition(&terminals, &[round_funding.clone()], &residuals, limits).unwrap();
++	assert_eq!(terminals.iter().map(|coin| coin.amount()).sum::<Amount>(), sat(400_000));
++	assert!(residuals.iter().all(|residual| residual.txout.value == Amount::ZERO));
+ 	fundings.insert(round_anchor, round_funding.clone());
+ 	let mut frontiers = BTreeMap::new();
+ 	for point in originals.iter().map(|coin| coin.chain_anchor()).chain(std::iter::once(round_anchor)) {
+@@ -1812,11 +1809,10 @@ async fn watchman_sweeps_lightning_vtxos() {
+ 			}
+ 			let residuals = residuals.into_iter().map(|(outpoint, txout)|
+ 				server::database::expiry_inventory::BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
+-			let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new(), serialized_bytes: 0 };
+-			let partition = selected.check_partition(&terminals, &[fundings[point].clone()], &residuals, limits).unwrap();
+-			assert_eq!(partition.roots.len(), 1);
+-			assert_eq!(partition.roots[0].terminal_amount, frontiers[point].value);
+-			assert_eq!(partition.roots[0].anchor_residual_amount, Amount::ZERO);
++			let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new() };
++			selected.check_partition(&terminals, &[fundings[point].clone()], &residuals, limits).unwrap();
++			assert_eq!(terminals.iter().map(|coin| coin.amount()).sum::<Amount>(), frontiers[point].value);
++			assert!(residuals.iter().all(|residual| residual.txout.value == Amount::ZERO));
+ 		}
+ 		let source_ids = customers.keys().chain(operators.keys()).cloned().collect::<Vec<_>>();
+ 		let expected = source_ids.iter().cloned().collect::<BTreeSet<_>>();
+@@ -2169,7 +2165,7 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
+ 		} }
+ 	}
+ 	let residuals = residuals.into_iter().map(|(outpoint, txout)| server::database::expiry_inventory::BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
+-	server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new(), serialized_bytes: 0 }
++	server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new() }
+ 		.check_partition(&replacements.iter().cloned().map(ark::ServerVtxo::from).collect::<Vec<_>>(), &[round_funding], &residuals, limits).unwrap();
+ 	let core = ctx.bitcoind().sync_client();
+ 	let raw_fee = |tx: &Transaction| {
+@@ -2241,7 +2237,7 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
+ 			}
+ 		}
+ 		assert!(!roots.is_empty() && roots.len() <= 18);
+-		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new(), serialized_bytes: 0 };
++		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new() };
+ 		let semantic = originals.iter().cloned().map(|coin| (ark::ServerVtxo::from(coin), None))
+ 			.chain(replacements.iter().enumerate().skip(2).map(|(owner, coin)| (ark::ServerVtxo::from(coin.clone()), Some(owner))));
+ 		let mut expected = BTreeMap::new();
+@@ -2654,7 +2650,7 @@ async fn watchman_sweeps_vtxopool_with_exit() {
+ 			}
+ 		} }
+ 		let residuals = residuals.into_iter().map(|(outpoint, txout)| server::database::expiry_inventory::BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
+-		server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new(), serialized_bytes: 0 }
++		server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new() }
+ 			.check_partition(&terminals, &[funding.clone()], &residuals, limits).unwrap();
+ 	}
+ 	bark1.start_exit_all().await;
+@@ -2684,7 +2680,7 @@ async fn watchman_sweeps_vtxopool_with_exit() {
+ 		let mut roots = Vec::new();
+ 		for row in rows {
+ 			let root = db.read(async |tx| tx.get_bare_vtxo_by_id(ark::VtxoId::from_str(row.get("vtxo_id")).unwrap()).await).await.unwrap().vtxo;
+-			let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root.clone()], regular: Vec::new(), serialized_bytes: 0 };
++			let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root.clone()], regular: Vec::new() };
+ 			if !operators.values().any(|coin| selected.path_root(&ark::ServerVtxo::from(coin.clone()), &fundings[&coin.chain_anchor()]).unwrap().is_some()) { continue; }
+ 			let actual = core.get_tx_out(&root.point().txid, root.point().vout, Some(true)).unwrap().unwrap();
+ 			assert!(actual.confirmations > 0);
+@@ -2693,7 +2689,7 @@ async fn watchman_sweeps_vtxopool_with_exit() {
+ 			roots.push(root);
+ 		}
+ 		assert!(!roots.is_empty());
+-		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new(), serialized_bytes: 0 };
++		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new() };
+ 		let terminals = operators.values().cloned().map(ark::ServerVtxo::from).collect::<Vec<_>>();
+ 		let mut residuals = BTreeMap::new();
+ 		for coin in &terminals {
+@@ -3706,7 +3702,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
+ 		} }
+ 	}
+ 	let residuals = residuals.into_iter().map(|(outpoint, txout)| server::database::expiry_inventory::BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
+-	server::database::expiry_inventory::BackingSnapshot { roots: vec![common], regular: Vec::new(), serialized_bytes: 0 }
++	server::database::expiry_inventory::BackingSnapshot { roots: vec![common], regular: Vec::new() }
+ 		.check_partition(&[ark::ServerVtxo::from(stale.clone()), ark::ServerVtxo::from(recipient.clone())], &[first_funding], &residuals, limits).unwrap();
+ 	let bark1_old = bark1.full_clone("bark1_old").await;
+ 	bark1.send_oor(bark2.address().await, sat(50_000)).await;
+@@ -3852,7 +3848,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
+ 		}
+ 		assert!(!roots.is_empty());
+ 		assert!(roots.iter().map(|root| root.expiry_height()).collect::<BTreeSet<_>>().len() <= 4);
+-		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new(), serialized_bytes: 0 };
++		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new() };
+ 		let mut semantic = originals.iter().chain([&recipient, &received]).cloned()
+ 			.map(|coin| (ark::ServerVtxo::from(coin), None)).collect::<Vec<_>>();
+ 		semantic.extend(changes.iter().cloned().map(|coin| (ark::ServerVtxo::from(coin), Some(0usize))));
+@@ -4503,7 +4499,7 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
+ 	assert_eq!(converted, customers.keys().cloned().collect());
+ 	let limits = server::database::expiry_inventory::BackingSnapshotLimits { max_rows: 10_000, max_serialized_bytes: 10_000_000 };
+ 	let root = db.read(async |tx| tx.get_bare_vtxo_by_id(ark::VtxoId::from(anchor)).await).await.unwrap().vtxo;
+-	let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new(), serialized_bytes: 0 };
++	let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new() };
+ 	let terminals = customers.values().chain(operators.values()).cloned().map(ark::ServerVtxo::from).collect::<Vec<_>>();
+ 	let mut residuals = BTreeMap::new();
+ 	for coin in &terminals { for step in coin.transactions() {
+@@ -4581,7 +4577,7 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
+ 		}
+ 		assert!(!roots.is_empty() && roots.len() <= 2);
+ 		assert_eq!(roots.iter().map(|root| root.amount()).sum::<Amount>() + oldest.amount(), sat(200_000));
+-		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new(), serialized_bytes: 0 };
++		let selected = server::database::expiry_inventory::BackingSnapshot { roots: roots.clone(), regular: Vec::new() };
+ 		let mut terminals = Vec::new();
+ 		let mut residuals = BTreeMap::new();
+ 		let mut expected = BTreeMap::new();
+@@ -5369,7 +5365,7 @@ async fn expiry_same_owner_fragments(name: &str, small_first: bool) {
+ 	assert_eq!(converted, customers.keys().cloned().collect());
+ 	let limits = server::database::expiry_inventory::BackingSnapshotLimits { max_rows: 10_000, max_serialized_bytes: 10_000_000 };
+ 	let root = db.read(async |tx| tx.get_bare_vtxo_by_id(ark::VtxoId::from(anchor)).await).await.unwrap().vtxo;
+-	let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new(), serialized_bytes: 0 };
++	let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new() };
+ 	let terminals = customers.values().chain(operators.values()).cloned().map(ark::ServerVtxo::from).collect::<Vec<_>>();
+ 	let mut residuals = BTreeMap::new();
+ 	for coin in &terminals { for step in coin.transactions() {

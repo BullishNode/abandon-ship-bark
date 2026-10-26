@@ -1,0 +1,44 @@
+{
+  "baseline_test_functions_in_changed_files": 604,
+  "fresh_test_functions_in_same_files": 599,
+  "removed": [
+    {
+      "path": "testing/tests/bark_sdk/fallback_adoption.rs",
+      "name": "history_payment_method_queries_preserve_order_and_variant_identity"
+    },
+    {
+      "path": "testing/tests/server/expiry_attribution.rs",
+      "name": "expiry_owner_finds_old_key_used_after_recovery"
+    },
+    {
+      "path": "testing/tests/server/expiry_attribution.rs",
+      "name": "expiry_owner_pays_key_beyond_former_recovery_gap"
+    },
+    {
+      "path": "testing/tests/server/fallback.rs",
+      "name": "fallback_cancelled_migration_releases_its_session_lock"
+    },
+    {
+      "path": "testing/tests/server/fallback.rs",
+      "name": "fallback_concurrent_initialization_preserves_upstream_history"
+    },
+    {
+      "path": "testing/tests/server/fallback.rs",
+      "name": "fallback_failed_initialization_rolls_back_schema"
+    },
+    {
+      "path": "testing/tests/server/fallback.rs",
+      "name": "fallback_schema_initialization_preserves_upstream_history"
+    }
+  ],
+  "restored_or_added": [
+    {
+      "path": "testing/tests/server/fallback.rs",
+      "name": "fallback_fresh_schema_reopens_concurrently_without_resetting_state"
+    },
+    {
+      "path": "testing/tests/server/recovery.rs",
+      "name": "recover_vtxos_by_xpub_disabled"
+    }
+  ]
+}

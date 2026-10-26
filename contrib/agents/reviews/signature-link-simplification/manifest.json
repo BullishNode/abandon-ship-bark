@@ -1,0 +1,17 @@
+{
+  "source_release": "d89a33fa9f06b5527a3e6eb846abe75e750bf5e2",
+  "contains_initial_patch": true,
+  "patch_sha256": "8bca2ea7b2135968d8e742fe8a99d969fc9bdb107bf29fa48f90e03e719b07e3",
+  "fresh_paired_stores_required": true,
+  "snapshot_shape": "required own_claims array, no legacy decoder",
+  "upstream": "959a489ff4934b181783b41c7d3ee68d85b95cbf",
+  "docker_image": "sha256:8ff8b71e01b76a308ce8428e7769565ff8574c4b5c8f72eb847719bc04370f79",
+  "upstream_reconstruction": {
+    "upstream": "959a489ff4934b181783b41c7d3ee68d85b95cbf",
+    "checked_files": 1034,
+    "mismatches": [],
+    "net_patch_sha256": "8d37b082f3179cdc9ee861143bddbb160be0bbb8360397a14be2a10d4f3b439e",
+    "tree_manifest_sha256": "5da4e412c9690d91114b9c19d80423d999459cb098f6bbb2169718921bc81a3f"
+  },
+  "status": "draft; native acceptance incomplete"
+}

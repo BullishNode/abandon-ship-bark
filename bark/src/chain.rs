@@ -12,7 +12,7 @@ use bdk_core::{BlockId, CheckPoint};
 use bdk_esplora::esplora_client;
 use bitcoin::constants::genesis_block;
 use bitcoin::{
-	Amount, Block, BlockHash, FeeRate, Network, OutPoint, Transaction, TxOut, Txid, Weight,
+	Amount, Block, BlockHash, FeeRate, Network, OutPoint, Transaction, Txid, Weight,
 };
 use log::{debug, info, warn};
 use tokio::sync::RwLock;
@@ -800,32 +800,6 @@ impl ChainSource {
 		}
 	}
 
-	/// Positive confirmed-UTXO proof for a recovery frontier. The caller must
-	/// independently prove the creating transaction canonical in the same stable
-	/// tip view. Missing output/status is not proof of an unspent output.
-	/// Like `outpoint_spent_confirmed`, a known mempool-only spend is not final.
-	pub(crate) async fn confirmed_output_is_unspent(
-		&self, outpoint: OutPoint, expected: &TxOut,
-	) -> anyhow::Result<bool> {
-		match self.inner() {
-			#[cfg(feature = "bitcoind-rpc")]
-			ChainSourceClient::Bitcoind { rpc, .. } => {
-				let Some(output) = rpc.try_get_tx_out(outpoint, false).await
-					.with_context(|| format!("recovery gettxout {} failed", outpoint))? else { return Ok(false); };
-				Ok(output.confirmations > 0 && output.value == expected.value
-					&& output.script_pub_key.script()? == expected.script_pubkey)
-			},
-			ChainSourceClient::Esplora(client) => {
-				let Some(transaction) = client.get_tx(&outpoint.txid).await? else { return Ok(false); };
-				ensure!(transaction.compute_txid() == outpoint.txid, "recovery output transaction identity changed");
-				if transaction.output.get(outpoint.vout as usize) != Some(expected) { return Ok(false); }
-				let status = client.get_output_status(&outpoint.txid, outpoint.vout as u64).await
-					.with_context(|| format!("recovery outspend lookup for {} failed", outpoint))?;
-				Ok(known_unspent_confirmed_output(status.as_ref()))
-			},
-		}
-	}
-
 	/// Gets the current fee rates from the chain source, falling back to user-specified values if
 	/// necessary.
 	///
@@ -1076,44 +1050,10 @@ fn classify_submit_package_errors<'a>(
 	}
 }
 
-// Esplora must actually know the output. An incomplete spender response is
-// unknown; a fully identified but unconfirmed spend preserves the confirmed
-// UTXO policy used by the bitcoind backend (`include_mempool: false`).
-fn known_unspent_confirmed_output(status: Option<&esplora_client::OutputStatus>) -> bool {
-	let Some(status) = status else { return false; };
-	if !status.spent {
-		return status.txid.is_none() && status.vin.is_none() && status.status.is_none();
-	}
-	status.txid.is_some() && status.vin.is_some()
-		&& status.status.as_ref().is_some_and(|spender| !spender.confirmed)
-}
-
 #[cfg(test)]
 mod test {
 	use super::*;
 	use std::str::FromStr;
-
-	#[test]
-	fn recovery_frontier_requires_known_output_and_complete_spend_status() {
-		let mut status = esplora_client::OutputStatus {
-			spent: false, txid: None, vin: None, status: None,
-		};
-		assert!(!known_unspent_confirmed_output(None));
-		assert!(known_unspent_confirmed_output(Some(&status)));
-		status.spent = true;
-		assert!(!known_unspent_confirmed_output(Some(&status)), "unknown spender is not unspent evidence");
-		status.txid = Some(Txid::from_str("1111111111111111111111111111111111111111111111111111111111111111").unwrap());
-		status.vin = Some(0);
-		assert!(!known_unspent_confirmed_output(Some(&status)), "missing confirmation status remains unknown");
-		status.status = Some(esplora_client::TxStatus {
-			confirmed: false, block_height: None, block_hash: None, block_time: None,
-		});
-		assert!(known_unspent_confirmed_output(Some(&status)), "known mempool-only spend preserves the confirmed UTXO policy");
-		status.status.as_mut().unwrap().confirmed = true;
-		assert!(!known_unspent_confirmed_output(Some(&status)), "confirmed competing spend never authorizes recovery");
-		status.spent = false;
-		assert!(!known_unspent_confirmed_output(Some(&status)), "inconsistent response stays blocked");
-	}
 
 	#[test]
 	fn classify_package_errors_attributes_root_cause_in_package_order() {

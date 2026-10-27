@@ -31,7 +31,7 @@ async fn wait_batched_parent(
 			let finished=db.read(async |t| {
 				let Some(view)=t.expiry_rebuild_token().await? else {return Ok(false);};
 				if view.captaind.height!=height || view.watchmand.height!=height || view.captaind.hash!=hash || view.watchmand.hash!=hash
-					|| !!t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0) {return Ok(false);}
+					|| !t.expiry_view_is_rebuilt(view).await? {return Ok(false);}
 				let row=t.query_one("SELECT status,sweep_txid,sweep_tx,confirmed_hash FROM expiry_allocation WHERE id=$1",&[&allocation]).await?;
 				assert_eq!(row.get::<_,Option<&str>>("sweep_txid"),Some(parent.compute_txid().to_string().as_str()));
 				assert_eq!(row.get::<_,Option<&[u8]>>("sweep_tx"),Some(serialize(parent).as_slice()));

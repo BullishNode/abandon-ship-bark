@@ -39,6 +39,17 @@ fn terminal_user_claim(vtxo: &ServerVtxo, spend: &Transaction) -> bool {
 }
 
 impl Watchman {
+	/// Keep preparation responsive to either daemon's completed view without
+	/// repeating the financial reconstruction on every idle timer tick.
+	pub(crate) async fn refresh_expiry_readiness(&self) -> anyhow::Result<()> {
+		let current = self.db.read(async |t| {
+			let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
+			t.expiry_view_is_rebuilt(view).await
+		}).await?;
+		if !current { self.rebuild_expiry_state().await?; }
+		Ok(())
+	}
+
 	pub(crate) async fn rebuild_expiry_state(&self) -> anyhow::Result<Option<ExpiryViewToken>> {
 		let Some(view) = self.db.read(async |t| t.expiry_rebuild_token().await).await? else {
 			return Ok(None);

@@ -609,7 +609,7 @@ async fn registered_receive_fallback() {
 			loop {
 				let rebuilt = db.read(async |tx| {
 					let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-					Ok(view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+					Ok(view.captaind == point && view.watchmand == point && tx.expiry_view_is_rebuilt(view).await?)
 				}).await.unwrap();
 				if rebuilt { break; }
 				tokio::time::sleep(Duration::from_millis(50)).await;

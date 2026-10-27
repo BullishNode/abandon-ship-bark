@@ -16,12 +16,7 @@ use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use server::database::Db;
 use server_rpc::protos;
 
-fn balance_fields(balance: &bark::Balance) -> [Amount; 10] {
-	[balance.spendable, balance.needs_refresh, balance.pending_lightning_send,
-		balance.claimable_lightning_receive, balance.pending_in_round, balance.pending_exit,
-		balance.pending_board, balance.pending_arkoor_send, balance.pending_offboard,
-		balance.awaiting_settlement]
-}
+use super::expiry_test::{wait_rebuilt as wait_exact_rebuilt, actual_fee, fields};
 
 async fn rebuilt(ctx: &TestContext, srv: &Captaind, db: &Db) {
 	let height = ctx.bitcoind().get_block_count().await;
@@ -29,32 +24,10 @@ async fn rebuilt(ctx: &TestContext, srv: &Captaind, db: &Db) {
 	srv.wait_for_sync_height(height).await;
 	srv.watchmand().wait_for_sync_height(height).await;
 	let point = BlockRef { height, hash: ctx.bitcoind().sync_client().get_best_block_hash().unwrap() };
-	tokio::time::timeout(Duration::from_secs(20), async {
-		loop {
-			let ready = db.read(async |tx| {
-				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && super::expiry_view_is_rebuilt(tx, view).await?)
-			}).await.unwrap();
-			if ready { break; }
-			tokio::time::sleep(Duration::from_millis(50)).await;
-		}
-	}).await.expect("both native expiry views must finish the actual Core height");
+	wait_exact_rebuilt(db, point, Duration::from_secs(20), "both native expiry views must finish the actual Core height").await;
 }
 
-async fn actual_fee(ctx: &TestContext, transaction: &Transaction) -> Amount {
-	let mut inputs = Amount::ZERO;
-	let mut seen = BTreeSet::new();
-	for input in &transaction.input {
-		assert!(seen.insert(input.previous_output));
-		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
-		inputs += previous.output[input.previous_output.vout as usize].value;
-	}
-	inputs.checked_sub(transaction.output.iter().map(|output| output.value).sum::<Amount>()).unwrap()
-}
-
-fn fallback_history(history: Vec<Movement>, baseline: &[Movement], _ids: &BTreeSet<VtxoId>,
-	_script: &bitcoin::Script, _gross: u64, _payout: u64,
-) -> Vec<Movement> {
+fn fallback_history(history: Vec<Movement>, baseline: &[Movement]) -> Vec<Movement> {
 	assert_eq!(history, baseline, "chain payout discovery must not add ordinary debits or replace history");
 	history
 }
@@ -147,8 +120,8 @@ async fn tiny_group() {
 	}
 	recipient.sync_mailbox().await.unwrap();
 	sender.sync_mailbox().await.unwrap();
-	// Manual native cosigning is not an SDK send action. Authenticate the
-	// real ordinary spend proof to retire its source instead of editing state.
+	// Manual native cosigning is not an SDK send action. Recover the
+	// source status to retire it through the ordinary upstream trust path.
 	sender.recover_vtxos([source.id()], None).await.unwrap();
 	assert_eq!(sender.get_vtxo_by_id(source.id()).await.unwrap().state, VtxoState::Spent);
 	let recipient_ids = leaves[..3].iter().map(|leaf| leaf.id()).collect::<BTreeSet<_>>();
@@ -362,26 +335,22 @@ async fn tiny_group() {
 	for id in &recipient_ids {
 		assert_eq!(returned.get_vtxo_by_id(*id).await.unwrap().state, VtxoState::Spent);
 	}
-	let history = fallback_history(returned.history().await.unwrap(), &recipient_before, &recipient_ids,
-		&recipient_binding.spk, 1_500, 500);
-	assert_eq!(balance_fields(&returned.balance().await.unwrap()), [Amount::ZERO; 10]);
+	let history = fallback_history(returned.history().await.unwrap(), &recipient_before);
+	assert_eq!(fields(&returned.balance().await.unwrap()), [Amount::ZERO; 10]);
 	for _ in 0..2 {
 		returned.sync_fallback_payouts().await.unwrap();
-		assert_eq!(fallback_history(returned.history().await.unwrap(), &recipient_before, &recipient_ids,
-			&recipient_binding.spk, 1_500, 500), history);
+		assert_eq!(fallback_history(returned.history().await.unwrap(), &recipient_before), history);
 	}
 	returned.stop_daemon_wait().await.unwrap();
 	drop(returned);
 	let reopened = Box::pin(recipient_cli.client()).await;
 	reopened.sync_fallback_payouts().await.unwrap();
-	assert_eq!(fallback_history(reopened.history().await.unwrap(), &recipient_before, &recipient_ids,
-		&recipient_binding.spk, 1_500, 500), history);
-	assert_eq!(balance_fields(&reopened.balance().await.unwrap()), [Amount::ZERO; 10]);
+	assert_eq!(fallback_history(reopened.history().await.unwrap(), &recipient_before), history);
+	assert_eq!(fields(&reopened.balance().await.unwrap()), [Amount::ZERO; 10]);
 	let sender_returned = Box::pin(sender_cli.client()).await;
 	sender_returned.sync_fallback_payouts().await.unwrap();
-	let _sender_history = fallback_history(sender_returned.history().await.unwrap(), &sender_before, &sender_ids,
-		&sender_binding.spk, 98_500, 97_500);
-	assert_eq!(balance_fields(&sender_returned.balance().await.unwrap()), [Amount::ZERO; 10]);
+	let _sender_history = fallback_history(sender_returned.history().await.unwrap(), &sender_before);
+	assert_eq!(fields(&sender_returned.balance().await.unwrap()), [Amount::ZERO; 10]);
 	sender_returned.stop_daemon_wait().await.unwrap();
 	reopened.stop_daemon_wait().await.unwrap();
 }

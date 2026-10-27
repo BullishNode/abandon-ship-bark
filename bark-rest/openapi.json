@@ -7127,25 +7127,6 @@
           },
           {
             "type": "object",
-            "description": "Emergency self-refresh recovery remains watched for chain reorganizations.",
-            "required": [
-              "claim_confirmed",
-              "status"
-            ],
-            "properties": {
-              "claim_confirmed": {
-                "type": "boolean"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "onchain-recovery"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
             "description": "We have unsigned funding transactions that might confirm",
             "required": [
               "status"

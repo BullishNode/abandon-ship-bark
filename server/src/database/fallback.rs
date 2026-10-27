@@ -29,9 +29,9 @@ impl Tx<'_> {
 		&self, mailbox_pk: PublicKey, record: &FallbackRegistration, network: Network,
 	) -> anyhow::Result<FallbackRegistration> {
 		record.verify(network, mailbox_pk).badarg("invalid fallback record")?;
-		let _ = self.query_opt("
+		self.execute("
 			INSERT INTO fallback_record (mailbox_pk, spk, mailbox_sig)
-			VALUES ($1, $2, $3) ON CONFLICT (mailbox_pk) DO NOTHING RETURNING id
+			VALUES ($1, $2, $3) ON CONFLICT (mailbox_pk) DO NOTHING
 		", &[
 			&mailbox_pk.to_string(), &record.spk.as_bytes().to_lower_hex_string(), &record.mailbox_signature.to_string(),
 		]).await.context("failed to store fallback record")?;

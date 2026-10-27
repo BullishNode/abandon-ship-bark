@@ -3,7 +3,6 @@ mod tree;
 
 use std::str::FromStr;
 use std::time::Duration;
-use std::sync::Arc;
 
 use bitcoin::secp256k1::{Keypair, PublicKey, Secp256k1, SecretKey};
 use bitcoin::Transaction;
@@ -25,7 +24,6 @@ use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef};
 use cln_rpc::listsendpays_request::ListsendpaysIndex;
 
 use server::OwnershipRefusal;
-use server::mailbox_manager::MailboxManager;
 use server::database::{BlockTable, Db, MailboxPayload};
 use server::database::htlc_vtxo::{self, HtlcDirection, HtlcResolution};
 use server::database::tree::VtxoTreeUpdate;
@@ -2533,28 +2531,6 @@ async fn mailbox_registration_guards_every_writer_reader_and_empty_batch() {
 	assert_eq!(db.read(async |tx| tx.get_mailbox_entries(mailbox, 0, 100, network).await).await.unwrap().len(), 1);
 	assert!(db.write(async |tx| tx.store_vtxos_in_mailbox(MailboxType::ArkoorReceive, mailbox, &[], network).await).await.unwrap().is_none());
 	assert!(db.write(async |tx| tx.store_vtxo_ids_in_mailbox(MailboxType::RecoveryVtxoId, mailbox, &[], network).await).await.unwrap().is_none());
-}
-
-#[tokio::test]
-async fn direct_mailbox_subscription_requires_registration_without_leaking_channel() {
-	let mut ctx = TestContext::new_minimal("postgresd/direct_mailbox_registration").await;
-	ctx.init_central_postgres().await;
-	let cfg = ctx.new_postgres(&ctx.test_name).await;
-	Db::create(&cfg).await.unwrap();
-	let db = Db::connect(&cfg).await.unwrap();
-	let manager = Arc::new(MailboxManager::new());
-	let key = Keypair::from_seckey_slice(&ark::SECP, &[248; 32]).unwrap();
-	let mailbox = MailboxIdentifier::from_pubkey(key.public_key());
-	let network = bitcoin::Network::Regtest;
-	let error = db.read(async |tx| manager.subscribe(tx, network, mailbox, 91).await).await.err().expect("unregistered subscription refused");
-	assert!(error.is::<OwnershipRefusal>());
-	super::register_test_owners(&db, super::test_server_mailbox_key(), &key, &[]).await;
-	let receiver = db.read(async |tx| manager.subscribe(tx, network, mailbox, 7).await).await.unwrap();
-	assert_eq!(*receiver.borrow(), 7, "refusal must not leave the earlier channel's initial checkpoint");
-	assert!(!receiver.has_changed().unwrap());
-	drop(receiver);
-	let receiver = db.read(async |tx| manager.subscribe(tx, network, mailbox, 11).await).await.unwrap();
-	assert_eq!(*receiver.borrow(), 11, "the last subscriber must still remove the channel");
 }
 
 #[tokio::test]

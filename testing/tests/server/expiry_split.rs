@@ -80,7 +80,7 @@ async fn expiry_requested_split_preserves_mixed_siblings_and_eventual_refund() {
 		loop {
 			let result = db.write(async |t| {
 				let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
-				if !super::expiry_view_is_rebuilt(t, view).await? { return Ok(false); }
+				if !t.expiry_view_is_rebuilt(view).await? { return Ok(false); }
 				t.request_expiry_split(view, &root).await
 			}).await.unwrap();
 			if result { break; }

@@ -111,7 +111,7 @@ async fn expiry_frozen_recipient_is_paid_after_sender_change_refresh() {
 					if db.read(async |tx| {
 						let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 						Ok(view.captaind.height == tip && view.watchmand.height == tip
-							&& view.captaind.hash == hash && view.watchmand.hash == hash && super::expiry_view_is_rebuilt(tx, view).await?)
+							&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
 					}).await.unwrap() { break; }
 					tokio::time::sleep(Duration::from_millis(50)).await;
 				}

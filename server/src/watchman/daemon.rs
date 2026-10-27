@@ -41,6 +41,7 @@ pub struct Daemon {
 	rtmgr: RuntimeManager,
 	#[allow(unused)]
 	sync_manager: SyncManager,
+	#[allow(unused)]
 	watchman_wallet: InstrumentedLock<PersistedWallet>,
 	#[allow(unused)]
 	frontier: Arc<tokio::sync::RwLock<VtxoExitFrontier>>,

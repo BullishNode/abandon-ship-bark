@@ -5,9 +5,8 @@
 //!
 //! The wallet owns a VTXO when it can derive the VTXO's user pubkey from its
 //! seed. That keypair also authorizes the query that asks the server whether
-//! the VTXO is spent. A Spent answer is checked against signed ordinary
-//! spend evidence and actual on-chain payouts; unproven spends retain their
-//! signed material in quarantine.
+//! the VTXO is spent. A spent VTXO is stored as spent rather than refused,
+//! since it is part of the wallet's history.
 
 use anyhow::Context;
 use bitcoin::secp256k1::Keypair;
@@ -111,6 +110,7 @@ impl Wallet {
 		let keypairs = self.find_vtxo_keypairs(user_pubkeys, gap_limit).await
 			.context("error scanning the vtxo key space")?;
 
+		let mut fallback_pending = Vec::new();
 		let mut to_store = Vec::with_capacity(pending.len());
 		for vtxo in &pending {
 			let id = vtxo.id();
@@ -119,7 +119,10 @@ impl Wallet {
 				Some(keypair) => self.import_vtxo_state(vtxo, keypair, &args).await,
 			};
 			match state {
-				Ok(state) => to_store.push((*vtxo, state)),
+				Ok((state, pending)) => {
+					if pending { fallback_pending.push((**vtxo).clone()); }
+					to_store.push((*vtxo, state));
+				},
 				Err(e) => {
 					if !args.allow_partial {
 						return Err(e);
@@ -132,17 +135,15 @@ impl Wallet {
 			return Ok(ids);
 		}
 
-		let quarantine = VtxoState::Locked { holder: None };
-		let rows = to_store.iter().map(|(v, s)| (*v, if *s == VtxoState::Spent { &quarantine } else { s })).collect::<Vec<_>>();
+		self.retain_fallback_pending(&fallback_pending).await?;
+		let rows = to_store.iter().map(|(v, s)| (*v, s)).collect::<Vec<_>>();
 		self.inner.db.store_vtxos(&rows).await
 			.context("failed to store imported VTXOs")?;
-
 		let spent = to_store.iter().filter(|(_, state)| *state == VtxoState::Spent)
-			.map(|(coin, _)| *coin).collect::<Vec<_>>();
-		self.adopt_reported_spent(&spent).await?;
+			.map(|(vtxo, _)| vtxo.id()).collect::<Vec<_>>();
+		self.trust_ordinary_spends(&spent).await?;
 
-		for (vtxo, _) in &to_store {
-			let state = self.inner.db.get_wallet_vtxo(vtxo.id()).await?.context("imported coin disappeared")?.state;
+		for (vtxo, state) in &to_store {
 			info!("Successfully imported VTXO {} as {}", vtxo.id(), state.kind());
 			ids.push(vtxo.id());
 		}
@@ -160,9 +161,9 @@ impl Wallet {
 		vtxo: &Vtxo<Full>,
 		keypair: &Keypair,
 		args: &ImportVtxoArgs,
-	) -> Result<VtxoState, ImportVtxoError> {
+	) -> Result<(VtxoState, bool), ImportVtxoError> {
 		if args.skip_status_check {
-			return Ok(VtxoState::Spendable);
+			return Ok((VtxoState::Spendable, false));
 		}
 
 		let id = vtxo.id();
@@ -170,8 +171,9 @@ impl Wallet {
 		let adoption = ServerStatusAdoption::from_spend_state(spend_state)
 			.with_context(|| format!("cannot decide the state of vtxo {id}"))?;
 		Ok(match adoption {
-			ServerStatusAdoption::Spendable => VtxoState::Spendable,
-			ServerStatusAdoption::Spent => VtxoState::Spent,
+			ServerStatusAdoption::Spendable => (VtxoState::Spendable, false),
+			ServerStatusAdoption::Spent => (VtxoState::Spent, false),
+			ServerStatusAdoption::FallbackPending => (VtxoState::Spendable, true),
 			ServerStatusAdoption::InFlight(state) =>
 				return Err(ImportVtxoError::InFlight { id, state }),
 		})

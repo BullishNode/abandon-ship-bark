@@ -1,4 +1,0 @@
-- Carry an optional recipient destination when requesting a Lightning invoice
-  Reuse `VtxoRequest` to let the server check a forwarded recipient before it
-  creates an invoice. Direct receives can omit the destination.
-  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)

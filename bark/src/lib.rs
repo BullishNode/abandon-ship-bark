@@ -398,8 +398,7 @@ mod board;
 mod config;
 mod daemon;
 mod fallback;
-pub use fallback::{FallbackRefusal, ExitProtectionOutcome, ExitProtectionSchedule,
-	ExitProtectionReport, ExitProtectionIssue, ExitProtectionIncomplete};
+pub use fallback::FallbackRefusal;
 pub use fallback::payouts::FallbackSnapshot;
 mod fees;
 mod import;
@@ -2072,9 +2071,6 @@ impl Wallet {
 		}
 		if let Err(error) = self.reconcile_all_expired_vtxos().await {
 			warn!("Expired coins await settlement: {:#}", error);
-		}
-		if let Err(error) = self.sync_recovery_quarantine().await {
-			warn!("Recovered coins await spend verification: {:#}", error);
 		}
 
 		futures::join!(

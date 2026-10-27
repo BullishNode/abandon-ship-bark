@@ -53,7 +53,6 @@ mod offboard;
 mod postgres;
 mod postgres_migrations;
 mod recovery;
-mod seed_wallet_recovery;
 mod registration;
 mod settler;
 mod watchman;
@@ -2831,17 +2830,6 @@ async fn board_exit_tx_prevents_registration() {
 
 	let balance = bark.spendable_balance_no_sync().await;
 	assert_eq!(balance, Amount::ZERO, "spendable balance should be zero since board was not registered");
-}
-
-/// Wait predicates use the canonical rebuild state, not a financial history token.
-async fn expiry_view_is_rebuilt(
-	tx: &server::database::Tx<'_>, view: server::database::expiry_chain::ExpiryViewToken,
-) -> anyhow::Result<bool> {
-	Ok(tx.query_one("SELECT NOT invalid AND generation=$1 \
-		AND rebuilt_captaind_height=$2 AND rebuilt_captaind_hash=$3 \
-		AND rebuilt_watchmand_height=$4 AND rebuilt_watchmand_hash=$5 FROM expiry_chain_view WHERE id=1",
-		&[&view.generation, &i64::from(view.captaind.height), &view.captaind.hash.to_string(),
-			&i64::from(view.watchmand.height), &view.watchmand.hash.to_string()]).await?.get(0))
 }
 
 /// Authenticate synthetic database coins through the same signature verifier as issuance.

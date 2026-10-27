@@ -4,14 +4,7 @@ pub(crate) mod payouts;
 mod refusal;
 mod sync;
 mod reconcile;
-mod protection;
-mod act_by;
-mod adoption;
-mod spend_proof;
-pub use act_by::{ExitProtectionOutcome, ExitProtectionSchedule, ExitProtectionReport,
-	ExitProtectionIssue, ExitProtectionIncomplete};
 pub use refusal::FallbackRefusal;
-pub(crate) use protection::spends_user_claim;
 
 use std::time::Duration;
 use std::collections::{BTreeMap, BTreeSet};

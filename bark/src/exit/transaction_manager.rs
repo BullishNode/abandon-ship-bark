@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 
 use bitcoin::{Network, OutPoint, Transaction, Txid};
@@ -7,7 +7,7 @@ use tokio::sync::RwLock;
 
 use ark::vtxo::Full;
 use ark::Vtxo;
-use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef, TransactionExt, TxStatus};
+use bitcoin_ext::{BlockDelta, BlockHeight, TransactionExt, TxStatus};
 
 use crate::chain::{BroadcastError, ChainSource};
 use crate::exit::models::{
@@ -164,9 +164,9 @@ impl ExitTransactionManager {
 		}
 	}
 
-	pub async fn sync(&mut self, no_rebroadcast: &HashSet<Txid>) -> anyhow::Result<(), ExitError> {
+	pub async fn sync(&mut self) -> anyhow::Result<(), ExitError> {
 		trace!("Syncing exit transaction manager");
-		self.update_tx_statuses(no_rebroadcast).await
+		self.update_tx_statuses().await
 	}
 
 	/// Refreshes the chain status of a single exit transaction and returns it.
@@ -177,26 +177,17 @@ impl ExitTransactionManager {
 		self.tx_status(txid).await
 	}
 
-	async fn update_tx_statuses(&mut self, no_rebroadcast: &HashSet<Txid>) -> anyhow::Result<(), ExitError> {
-		let tip_ref = self.chain_source.tip_ref_uncached().await
-			.map_err(|error| ExitError::TipRetrievalFailure { error: error.to_string() })?;
-		let tip = tip_ref.height;
+	async fn update_tx_statuses(&mut self) -> anyhow::Result<(), ExitError> {
+		let tip = self.tip().await?;
 		let keys = self.status.keys().cloned().collect::<Vec<_>>();
 		for txid in keys {
-			// Persisted child origins seed this cache on cold load. Depth does not
-			// prove that their block survived a fork. Invalidate BEFORE any await,
-			// so failed status lookup/rebroadcast cannot retain stale finality.
-			if let TxStatus::Confirmed(block) = self.status[&txid].clone() {
-				self.status.insert(txid, TxStatus::NotFound);
+			// We should query the status of every transaction unless they're already deeply
+			// confirmed
+			let status = self.status.get(&txid).unwrap();
+			if let TxStatus::Confirmed(block) = status {
+				trace!("Skipping deeply confirmed exit tx {}", txid);
 				if block.height <= tip.saturating_sub(SPEND_CONFIRMATIONS) {
-					let canonical = self.chain_source.block_ref(block.height).await.map_err(|error|
-						warn!("Cannot validate cached exit confirmation {}: {:#}", txid, error)).ok();
-					let after = self.chain_source.tip_ref_uncached().await.map_err(|error|
-						warn!("Cannot validate exit confirmation tip {}: {:#}", txid, error)).ok();
-					if deep_confirmation_is_current(block, tip_ref, canonical, after) {
-						self.status.insert(txid, TxStatus::Confirmed(block));
-						continue;
-					}
+					continue;
 				}
 			}
 			// Failures for one tx should not abort the whole sync. The most common cause is
@@ -204,13 +195,7 @@ impl ExitTransactionManager {
 			// reports a tx as mempool while bitcoind's mempool has already evicted or
 			// confirmed it). Log and move on — the next sync tick will retry. Each exit's
 			// own `progress()` call surfaces fatal problems via its per-VTXO error field.
-			// Both parent and child index entries can point at one package.
-			// Normalize to the parent before applying the suppression.
-			let broadcast_local = match self.index.get(&txid).and_then(Weak::upgrade) {
-				Some(package) => !no_rebroadcast.contains(&package.read().await.exit.txid),
-				None => true, // No package means this path only reads chain status.
-			};
-			if let Err(e) = self.update_one_tx_status(txid, tip, broadcast_local).await {
+			if let Err(e) = self.update_one_tx_status(txid, tip, true).await {
 				warn!("Failed to update status for exit tx {}: {:#}", txid, e);
 			}
 		}
@@ -237,7 +222,6 @@ impl ExitTransactionManager {
 				})?;
 				let status = self.get_tx_status(txid).await?;
 				trace!("Exit tx {} old status {:?}, new status {:?}", txid, self.status.get(&txid), Some(status));
-				self.status.insert(txid, status.clone());
 
 				match status {
 					TxStatus::NotFound if broadcast_local => {
@@ -344,12 +328,9 @@ impl ExitTransactionManager {
 	/// chain failure is reported as `Err`.
 	pub async fn find_conflicting_spend(
 		&mut self,
-		_tip: BlockHeight,
+		tip: BlockHeight,
 		exit_txid: Txid,
 	) -> anyhow::Result<Vec<OutPoint>, ExitError> {
-		let observed_tip = self.chain_source.tip_ref_uncached().await
-			.map_err(|error| ExitError::TipRetrievalFailure { error: error.to_string() })?;
-		let tip = observed_tip.height;
 		let inputs = {
 			let package = self.get_package(exit_txid)?;
 			let guard = package.read().await;
@@ -363,7 +344,7 @@ impl ExitTransactionManager {
 			// Also what makes the utxo set usable below: `gettxout` reports a spent output and
 			// one whose tx isn't mined yet alike, so only a confirmed parent makes its absence
 			// mean "spent".
-			let TxStatus::Confirmed(block) = self.get_tx_status(input.txid).await? else {
+			let TxStatus::Confirmed(_) = self.tx_status(input.txid).await? else {
 				// We are only called once every input has confirmed. Skipping quietly would
 				// report "no conflicting spend" for an input we never looked at.
 				warn!("Exit tx {} has unconfirmed input {}, skipping it while looking for \
@@ -371,10 +352,6 @@ impl ExitTransactionManager {
 				);
 				continue;
 			};
-			if block.height > tip || self.chain_source.block_ref(block.height).await
-				.map_err(|error| ExitError::BlockRetrievalFailure { height: block.height, error: error.to_string() })? != block {
-				return Err(ExitError::InvalidWalletState { error: format!("input {} has no current canonical confirmation", input) });
-			}
 			// An input still in the utxo set has no confirmed spender, which is the whole
 			// question for every input but the rare swept one. The scan below is only needed to
 			// name the spender and the block it confirmed in.
@@ -439,10 +416,6 @@ impl ExitTransactionManager {
 		// but reading that off the chain rather than the cache keeps a successful exit from
 		// terminating as swept if it ever does.
 		if !deeply_spent.is_empty() {
-			if self.chain_source.tip_ref_uncached().await
-				.map_err(|error| ExitError::TipRetrievalFailure { error: error.to_string() })? != observed_tip {
-				return Err(ExitError::InvalidWalletState { error: "chain changed while checking exit input conflicts".into() });
-			}
 			if let TxStatus::Confirmed(block) = self.get_tx_status(exit_txid).await? {
 				warn!("Exit tx {} confirmed in block {} while its inputs looked spent, so the \
 					spends are its own", exit_txid, block.height,
@@ -452,10 +425,6 @@ impl ExitTransactionManager {
 			}
 		}
 
-		if !deeply_spent.is_empty() && self.chain_source.tip_ref_uncached().await
-			.map_err(|error| ExitError::TipRetrievalFailure { error: error.to_string() })? != observed_tip {
-			return Err(ExitError::InvalidWalletState { error: "chain changed before exit input conflict publication".into() });
-		}
 		Ok(deeply_spent)
 	}
 
@@ -847,34 +816,5 @@ mod test {
 		// A confirmed parent is the one case that has to ask the chain. Reaching the unroutable
 		// chain source fails, which is what keeps this from passing by never getting that far.
 		assert!(mgr.find_conflicting_spend(tip, exit).await.is_err());
-	}
-}
-
-/// Only a current canonical block under an unchanged uncached tip permits the
-/// deep-confirmation optimization; an absent/error observation never does.
-fn deep_confirmation_is_current(
-	block: BlockRef, tip: BlockRef, canonical: Option<BlockRef>, after: Option<BlockRef>,
-) -> bool {
-	block.height <= tip.height.saturating_sub(SPEND_CONFIRMATIONS)
-		&& canonical == Some(block) && after == Some(tip)
-}
-
-#[cfg(test)]
-mod confirmation_cache_tests {
-	use super::*;
-	use bitcoin::hashes::Hash;
-
-	#[test]
-	fn deep_cached_confirmation_requires_same_canonical_block_and_stable_tip() {
-		let block = BlockRef { height: BlockHeight::new(10), hash: bitcoin::BlockHash::from_byte_array([1; 32]) };
-		let tip = BlockRef { height: BlockHeight::new(20), hash: bitcoin::BlockHash::from_byte_array([2; 32]) };
-		let fork = BlockRef { hash: bitcoin::BlockHash::from_byte_array([3; 32]), ..block };
-		let changed = BlockRef { hash: bitcoin::BlockHash::from_byte_array([4; 32]), ..tip };
-		assert!(deep_confirmation_is_current(block, tip, Some(block), Some(tip)));
-		assert!(!deep_confirmation_is_current(block, tip, Some(fork), Some(tip)));
-		assert!(!deep_confirmation_is_current(block, tip, Some(block), Some(changed)));
-		assert!(!deep_confirmation_is_current(block, tip, None, Some(tip)));
-		assert!(!deep_confirmation_is_current(block, tip, Some(block), None));
-		assert!(!deep_confirmation_is_current(tip, tip, Some(tip), Some(tip)));
 	}
 }

@@ -55,7 +55,6 @@
 				};
 
 				isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
-				clightning = if isDarwin then null else import ./nix/package-clightning.nix { inherit pkgs; };
 
 				# We serve the static musl binaries for Linux user so it runs everywhere.
 				hostRustTarget =
@@ -214,18 +213,6 @@
 					];
 				};
 
-				rustBuildToolchain = fenix.packages.${system}.combine [
-					rustToolchain.rustc
-					rustToolchain.cargo
-					rustToolchain.rust-src
-					rustToolchain.llvm-tools
-					rustToolchain.rust-std
-				];
-
-				cln-grpc = import ./nix/package-cln-grpc.nix {
-					inherit pkgs rustBuildToolchain;
-				};
-
 				serverPackages = import ./nix/package-server.nix {
 					pkgs = releasePkgs;
 					inherit lib craneLib;
@@ -240,8 +227,6 @@
 			in
 			{
 				packages = {
-					inherit cln-grpc;
-
 					# Release artifacts keyed by target triple.
 					bark-x86_64-unknown-linux-gnu  = barkPackages.x86_64-unknown-linux-gnu;
 					bark-x86_64-unknown-linux-musl = barkPackages.x86_64-unknown-linux-musl;
@@ -270,9 +255,6 @@
 				}
 				// lib.optionalAttrs (builtins.hasAttr hostRustTarget serverPackages) {
 					bark-server = serverPackages.${hostRustTarget};
-				}
-				// lib.optionalAttrs (!isDarwin) {
-					inherit clightning;
 				};
 
 				# for `nix run` support
@@ -299,7 +281,7 @@
 					};
 
 					devShell = import ./nix/dev-shell.nix {
-						inherit system pkgs lib fenix buildShell slog-tools rustTargetWasm cln-grpc clightning rustBuildToolchain;
+						inherit system pkgs lib fenix buildShell slog-tools rustTargetWasm;
 					};
 
 					ciShell = import ./nix/ci-shell.nix {

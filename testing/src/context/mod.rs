@@ -442,7 +442,6 @@ impl TestContext {
 			max_vtxo_exit_depth: 50,
 			max_arkoor_fanout: 4,
 			allow_expired_arkoor: false,
-			max_htlc_expiry_delta: BlockDelta::new(288),
 			rpc_rich_errors: true,
 			nursery_confirm_target_blocks: BlockDelta::new(6),
 			sync_manager_block_poll_interval: Duration::from_millis(100),

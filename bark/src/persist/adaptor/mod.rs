@@ -61,7 +61,7 @@ use lightning_invoice::Bolt11Invoice;
 use serde::{de::DeserializeOwned, Serialize};
 
 use ark::lightning::{PaymentHash, Preimage};
-use ark::{Vtxo, VtxoId};
+use ark::{ProtocolEncoding, Vtxo, VtxoId};
 use ark::vtxo::Full;
 
 use crate::actions::{WalletActionCheckpoint, WalletActionId};
@@ -721,6 +721,18 @@ impl <S: StorageAdaptor> BarkPersister for StorageAdaptorWrapper<S> {
 			lock.put(record).await?;
 		}
 		Ok(())
+	}
+
+	async fn update_vtxo_witnesses(&self, vtxo: &Vtxo<Full>) -> anyhow::Result<bool> {
+		ensure!(vtxo.has_all_witnesses(), "replacement VTXO witnesses are incomplete");
+		let mut lock = self.inner.write().await;
+		let Some(mut record) = lock.get(partition::VTXO, &vtxo.id().to_bytes()).await? else { return Ok(false); };
+		let mut stored = record.to_data::<SerdeVtxo>()?;
+		ensure!(stored.vtxo.to_bare().serialize() == vtxo.to_bare().serialize(), "replacement VTXO changes its bare identity");
+		stored.vtxo = vtxo.clone();
+		record.data = serde_json::to_vec(&stored)?;
+		lock.put(record).await?;
+		Ok(true)
 	}
 
 	async fn get_wallet_vtxo(&self, id: VtxoId) -> anyhow::Result<Option<WalletVtxo>> {

@@ -18,7 +18,7 @@ async fn wait_rebuilt(ctx: &TestContext, db: &Db, height: BlockHeight) -> server
 				};
 				if view.captaind.height != height || view.watchmand.height != height
 					|| view.captaind.hash != hash || view.watchmand.hash != hash
-					|| !super::expiry_view_is_rebuilt(t, view).await? {
+					|| !t.expiry_view_is_rebuilt(view).await? {
 					return Ok(None);
 				}
 				Ok(Some(view))
@@ -79,11 +79,18 @@ async fn expiry_view_rebuild_services_delayed_cap_ack_and_next_block_without_fin
 	srv.start().await.unwrap();
 	let height = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
 	let initial = wait_rebuilt(&ctx, &db, height).await;
-	// The completed canonical view must remain available across service ticks.
+	// Idle service ticks must retain readiness without rewriting the ledger.
+	let version = db.read(async |t| Ok(t.query_one(
+		"SELECT xmin::text FROM expiry_chain_view WHERE id=1", &[],
+	).await?.get::<_, String>(0))).await.unwrap();
 	for _ in 0..3 {
 		tokio::time::sleep(Duration::from_millis(1100)).await;
 		assert_eq!(wait_rebuilt(&ctx, &db, height).await, initial,
 			"unchanged canonical acknowledgments must retain the same view");
+		assert_eq!(db.read(async |t| Ok(t.query_one(
+			"SELECT xmin::text FROM expiry_chain_view WHERE id=1", &[],
+		).await?.get::<_, String>(0))).await.unwrap(), version,
+			"idle readiness polling must not repeat financial reconstruction");
 	}
 	let next = ctx.generate_blocks(1).await;
 	assert!(next>height);

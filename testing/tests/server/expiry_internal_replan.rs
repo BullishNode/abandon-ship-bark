@@ -19,6 +19,8 @@ use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi, json::SignRawTransactionInput};
 use server::database::Db;
 use server_rpc::protos;
 
+use super::expiry_lightning_terminal::assert_stored_grant_ancestry;
+
 // Keep large debug create futures off the native test poll frame.
 #[inline(never)]
 fn create_server<'a>(builder: ark_testing::context::builders::CaptaindBuilder<'a>)
@@ -34,27 +36,6 @@ fn create_wallet<'a>(builder: ark_testing::context::builders::BarkSdkBuilder<'a>
 	Box::pin(builder.create())
 }
 
-async fn assert_stored_grant_ancestry(db: &Db, grants: &[Vtxo<Full>]) {
-	let mut expected = std::collections::BTreeMap::new();
-	for grant in grants {
-		for step in grant.transactions() {
-			let raw = bitcoin::consensus::serialize(&step.tx);
-			if let Some(old) = expected.insert(step.tx.compute_txid().to_string(), raw.clone()) {
-				assert_eq!(old, raw, "shared signed grant ancestry must be exact");
-			}
-		}
-	}
-	let ids = expected.keys().cloned().collect::<Vec<_>>();
-	let actual = db.read(async |t| Ok(t.query("SELECT txid,signed_tx FROM virtual_transaction WHERE txid=ANY($1)",
-		&[&ids]).await?)).await.unwrap().into_iter().map(|row|
-		(row.get::<_, String>("txid"), row.get::<_, Option<Vec<u8>>>("signed_tx")))
-		.collect::<std::collections::BTreeMap<_,_>>();
-	assert_eq!(actual.len(), expected.len(), "server is missing a granted receive's ancestor");
-	for (txid, raw) in expected {
-		assert_eq!(actual.get(&txid).and_then(Option::as_ref), Some(&raw),
-			"server lost the actual signature/preimage for receive ancestor {txid}");
-	}
-}
 
 /// Before abandonment the receiver exposes only its already signed grant
 /// paths. This deliberately isolates financial replan from the independently
@@ -255,7 +236,7 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 							let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
 							if view.captaind.height != tip || view.watchmand.height != tip
 								|| view.captaind.hash != hash || view.watchmand.hash != hash
-								|| !super::expiry_view_is_rebuilt(t, view).await? { return Ok(false); }
+								|| !t.expiry_view_is_rebuilt(view).await? { return Ok(false); }
 							// The completed chain view does not mean captaind's separate
 							// readiness worker has committed both refund obligations yet.
 							// Reserve the original shared root before allowing its sweep.

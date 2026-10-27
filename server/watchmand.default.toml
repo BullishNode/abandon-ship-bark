@@ -24,8 +24,7 @@ otel_deployment_name = "my_regtest"
 
 # Optional listen address for the private admin gRPC API.
 # Unauthenticated by design and as privileged as shell access to this host.
-# The operator must keep it on loopback and block public access in the firewall.
-# Do not expose it through a reverse proxy.
+# Keep it on loopback.
 #admin_address = "127.0.0.1:4536"
 
 ###############
@@ -72,10 +71,8 @@ fallback_fee_rate_fast = "25sat/vb"
 fallback_fee_rate_regular = "10sat/vb"
 # Fallback feerate for slow confirmation (6 block target)
 fallback_fee_rate_slow = "4sat/vb"
-# Optional ceiling for later fee estimate updates.
-# Initial fallback feerates can exceed this value.
-# This does not cap the total miner subsidy or replacement fee.
-# Unset by default (no ceiling).
+# Optional ceiling for fetched fee rates. Any rate returned by the backend
+# above this value is clamped down to it. Unset by default (no ceiling).
 # max_fee_rate = "1000sat/vb"
 
 

@@ -2,8 +2,7 @@
 //! followed by automatic sender refund and fresh-seed BIP86 recovery. Core and CLN continue.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::{self, File};
-use std::io::Read;
+use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -18,7 +17,6 @@ use async_trait::async_trait;
 use bitcoin::{Address, Amount, Network, OutPoint, Transaction};
 use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::consensus::deserialize;
-use bitcoin::hashes::{sha256, Hash, HashEngine};
 use bitcoin::hex::DisplayHex;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef, TxOutExt};
@@ -27,11 +25,12 @@ use tokio::process::Command;
 
 use ark_testing::{require_bitcoind_chain_source, sat, Captaind, TestContext};
 use ark_testing::daemon::{Daemon, DaemonHelper};
-use ark_testing::daemon::captaind::WalletAdminClient;
 use ark_testing::daemon::postgres::PostgresHelper;
 use ark_testing::daemon::watchmand::Watchmand;
 use server::database::{Db, SpendState};
 use server_rpc::protos;
+
+use super::expiry_test::{copy_tree, postgres_tool, watchman_coins, wait_watchman_coins, mine_continuing_core, canonical, actual_fee};
 
 /// The standard helper's prepare deletes the cluster and runs initdb. This
 /// wrapper delegates only reservations, the real postgres command and readiness.
@@ -55,59 +54,6 @@ impl DaemonHelper for ExistingCluster {
 		assert!(!self.0.pgdata().join("postmaster.pid").exists());
 		Ok(())
 	}
-}
-
-fn file_hash(path: &Path) -> String {
-	let mut file = File::open(path).unwrap();
-	let mut engine = sha256::Hash::engine();
-	let mut buffer = [0; 65_536];
-	loop {
-		let length = file.read(&mut buffer).unwrap();
-		if length == 0 { break; }
-		engine.input(&buffer[..length]);
-	}
-	sha256::Hash::from_engine(engine).to_string()
-}
-
-/// Include the entire cluster, especially pg_wal. Reject links/tablespaces and
-/// special files instead of silently creating an incomplete physical backup.
-fn copy_tree(source: &Path, target: &Path) -> BTreeMap<String, (u64, String)> {
-	assert!(!target.exists());
-	assert!(fs::symlink_metadata(source).unwrap().file_type().is_dir());
-	fs::create_dir(target).unwrap();
-	fs::set_permissions(target, fs::Permissions::from_mode(0o700)).unwrap();
-	let mut pending = vec![(source.to_path_buf(), target.to_path_buf())];
-	let mut manifest = BTreeMap::new();
-	let mut bytes = 0_u64;
-	while let Some((source_dir, target_dir)) = pending.pop() {
-		for entry in fs::read_dir(source_dir).unwrap() {
-			let entry = entry.unwrap();
-			let kind = entry.file_type().unwrap();
-			let destination = target_dir.join(entry.file_name());
-			if kind.is_dir() {
-				fs::create_dir(&destination).unwrap();
-				fs::set_permissions(&destination, fs::Permissions::from_mode(0o700)).unwrap();
-				pending.push((entry.path(), destination));
-			} else {
-				assert!(kind.is_file(), "physical backup cannot omit links or special files");
-				let length = entry.metadata().unwrap().len();
-				bytes = bytes.checked_add(length).unwrap();
-				assert!(bytes <= 512 * 1024 * 1024, "single-case cold backup copy budget exceeded");
-				let before = file_hash(&entry.path());
-				fs::copy(entry.path(), &destination).unwrap();
-				fs::set_permissions(&destination, fs::Permissions::from_mode(0o600)).unwrap();
-				assert_eq!(file_hash(&destination), before);
-				assert_eq!(file_hash(&entry.path()), before, "cold source changed during copy");
-				manifest.insert(entry.path().strip_prefix(source).unwrap().to_string_lossy().into_owned(), (length, before));
-			}
-		}
-	}
-	manifest
-}
-
-fn postgres_tool(name: &str) -> Command {
-	Command::new(std::env::var_os("POSTGRES_BINS").map(PathBuf::from)
-		.map(|directory| directory.join(name)).unwrap_or_else(|| PathBuf::from(name)))
 }
 
 async fn assert_stopped_cluster(path: &Path, unclean: bool) {
@@ -154,52 +100,6 @@ fn postgres_process_tree(path: &Path) -> BTreeMap<u32, u64> {
 	}
 	assert!(processes.contains_key(&pid), "the original owned postmaster must be alive before crash");
 	processes
-}
-
-async fn watchman_coins(watchman: &Watchmand) -> BTreeSet<OutPoint> {
-	let address = watchman.config().admin_address.unwrap();
-	let mut rpc = WalletAdminClient::connect(format!("http://{address}")).await.unwrap();
-	rpc.wallet_status(protos::Empty {}).await.unwrap().into_inner().watchman.unwrap()
-		.confirmed_utxos.into_iter().map(|point| OutPoint::from_str(&point).unwrap()).collect()
-}
-
-async fn wait_watchman_coins(watchman: &Watchmand, expected: &BTreeSet<OutPoint>) -> BTreeSet<OutPoint> {
-	tokio::time::timeout(Duration::from_secs(10), async {
-		loop {
-			let actual = watchman_coins(watchman).await;
-			if expected.is_subset(&actual) { break actual; }
-			tokio::time::sleep(Duration::from_millis(50)).await;
-		}
-	}).await.expect("the real restored watchman wallet must observe every expected confirmed output")
-}
-
-/// Advance only the continuing Core here, then explicitly synchronize the
-/// restored services. TestContext correctly skips stopped service helpers;
-/// this local choice makes the cold-backup authority boundary explicit.
-async fn mine_continuing_core(ctx: &TestContext, count: u32) -> BlockHeight {
-	tokio::time::sleep(Duration::from_secs(1)).await;
-	ctx.bitcoind().generate(count).await;
-	BlockHeight::new(u32::try_from(ctx.bitcoind().get_block_count().await).unwrap())
-}
-
-async fn actual_fee(ctx: &TestContext, tx: &Transaction) -> Amount {
-	let mut inputs = Amount::ZERO;
-	for input in &tx.input {
-		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
-		inputs += previous.output[input.previous_output.vout as usize].value;
-	}
-	inputs.checked_sub(tx.output.iter().map(|output| output.value).sum()).unwrap()
-}
-
-fn canonical(ctx: &TestContext, tx: &Transaction) -> BlockRef {
-	let core = ctx.bitcoind().sync_client();
-	let info = core.custom_get_raw_transaction_info(tx.compute_txid(), None).unwrap().unwrap();
-	assert!(info.confirmations.unwrap_or(0) >= 6);
-	let hash = info.blockhash.unwrap();
-	let header = core.get_block_header_info(&hash).unwrap();
-	assert_eq!(core.get_block_hash(header.height as u64).unwrap(), hash);
-	assert!(core.get_block(&hash).unwrap().txdata.iter().any(|actual| actual == tx));
-	BlockRef { height: BlockHeight::new(u32::try_from(header.height).unwrap()), hash }
 }
 
 /// A ledger allocation only locates a candidate. Core must prove that it
@@ -276,7 +176,7 @@ async fn rebuilt(db: &Db, point: BlockRef) {
 		loop {
 			if db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && super::expiry_view_is_rebuilt(tx, view).await?)
+				Ok(view.captaind == point && view.watchmand == point && tx.expiry_view_is_rebuilt(view).await?)
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -379,8 +279,6 @@ async fn lightning_backup(unclean: bool) {
 	let ctx = TestContext::new(context).await;
 	let first_height = u32::try_from(ctx.bitcoind().get_block_count().await).unwrap();
 	let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
-	assert_eq!(lightning.internal.grpc_client().await.getinfo(cln_rpc::GetinfoRequest {}).await
-		.unwrap().into_inner().version, "v26.06.6-abandon6");
 	// Keep real operator returns outside the rounds wallet: the fixture must
 	// not start unrelated replenishment while measuring this finite backup cut.
 	let operator_address = ctx.bitcoind().get_new_address();

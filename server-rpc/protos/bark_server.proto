@@ -17,8 +17,6 @@ service ArkService {
 
 	rpc GetVtxo(GetVtxoRequest) returns (GetVtxoResponse) {}
 	rpc GetVtxoStatus(GetVtxoStatusRequest) returns (GetVtxoStatusResponse) {}
-	// Fully signed ordinary OOR descendants only; incomplete proofs are refused.
-	rpc GetVtxoSpendProof(GetVtxoStatusRequest) returns (GetVtxoSpendProofResponse) {}
 	rpc GetVtxosByIds(GetVtxosByIdsRequest) returns (GetVtxosByIdsResponse) {}
 	rpc GetVtxosStatusByIds(GetVtxosStatusByIdsRequest) returns (GetVtxosStatusByIdsResponse) {}
 	// Seed recovery without the mailbox: lists the VTXOs, in any spend state,
@@ -221,6 +219,9 @@ enum VtxoSpendState {
 	VTXO_SPEND_STATE_UNREGISTERED = 4;
 	// The VTXO's preimage haven't been revealed yet
 	VTXO_SPEND_STATE_HTLC_RECV_UNCLAIMED = 5;
+	// Customer principal allocated for fallback. The client verifies the
+	// canonical payment before it retires this claim.
+	VTXO_SPEND_STATE_FALLBACK_PENDING = 6;
 }
 
 message GetVtxoStatusRequest {
@@ -231,13 +232,6 @@ message GetVtxoStatusRequest {
 
 message GetVtxoStatusResponse {
 	VtxoSpendState spend_state = 1;
-}
-
-message GetVtxoSpendProofResponse {
-	// Complete immediate ordinary branches after the original checkpoint.
-	// Each full VTXO contains the owner-authorized signed path, including change.
-	// The client independently validates every signature and branch.
-	repeated bytes vtxos = 1;
 }
 
 message VtxoStatusQuery {

@@ -44,12 +44,13 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::Context;
-use bitcoin::{Address, Amount, FeeRate, Transaction, TxOut, ScriptBuf, Weight};
+use bitcoin::{Address, Amount, FeeRate, Transaction, TxIn, TxOut, Sequence, ScriptBuf, Weight, Witness, sighash};
 use bitcoin::Txid;
 use tokio::sync::watch;
 use tracing::{info, trace, warn};
 
 use ark::{ServerVtxo, ServerVtxoPolicy, VtxoId, VtxoPolicy};
+use ark::vtxo::policy::signing::VtxoSigner;
 use bitcoin_ext::{fee, BlockHeight, BlockRef, TxStatus, P2TR_DUST};
 use bitcoin_ext::bdk::{WalletExt, KEYCHAIN};
 use bitcoin_ext::cpfp::MakeCpfpFees;
@@ -222,9 +223,9 @@ impl Watchman {
 		loop {
 			tokio::select! {
 				_ = rebuild_timer.tick() => {
-					// Reuse the completed-token/ledger fast path. This performs
-					// reconstruction only: no claim, replay or payout publication.
-					if let Err(error) = self.rebuild_expiry_state().await {
+					// Probe the exact completed view. Rebuild only when it changed;
+					// the financial sweep still reconstructs before publication.
+					if let Err(error) = self.refresh_expiry_readiness().await {
 						warn!("Error rebuilding expiry readiness: {error:#}");
 					}
 					// The same loop serializes this with sweeps; reset coalesces
@@ -618,7 +619,7 @@ impl Watchman {
 		vtxos: &[ServerVtxo],
 		fee_rate: FeeRate,
 	) -> anyhow::Result<()> {
-		let tx = self.build_claim_tx(vtxos, fee_rate).await?;
+		let tx = self.build_claim_tx(vtxos, fee_rate, None).await?;
 		let txid = tx.compute_txid();
 		self.db.write(async |t| {
 			t.lock_watchman_claim_inputs(vtxos).await?;
@@ -659,14 +660,56 @@ impl Watchman {
 		&self,
 		vtxos: &[ServerVtxo],
 		fee_rate: FeeRate,
+		payout_outputs: Option<Vec<TxOut>>,
 	) -> anyhow::Result<Transaction> {
-		let (inputs, clauses, total_input_amount) = self.claim_inputs(vtxos).await?;
-		let total_input_weight = inputs.iter().zip(&clauses).zip(vtxos).map(|((input, clause), vtxo)| {
-			4 * input.base_size() + clause.as_ref().map(|c| c.witness_size(vtxo)).unwrap_or(1 + 1 + 64)
-		}).sum::<usize>();
+		let mut inputs = Vec::with_capacity(vtxos.len());
+		let mut clauses = Vec::with_capacity(vtxos.len());
+		let mut total_input_weight = 0;
+		let mut total_input_amount = Amount::ZERO;
+
+		for vtxo in vtxos {
+			//TODO(stevenroose) try remove this special case
+			if *vtxo.policy() == ServerVtxoPolicy::ServerOwned {
+				let input = TxIn {
+					previous_output: vtxo.point(),
+					script_sig: ScriptBuf::new(),
+					sequence: Sequence::ZERO,
+					witness: Witness::new(),
+				};
+
+				// TxIn base weight (non-witness) + witness weight
+				total_input_weight += 4 * input.base_size() + (1 + 1 + 64); // nb items + sig
+				total_input_amount += vtxo.amount();
+
+				inputs.push(input);
+				clauses.push(None);
+			} else {
+				let clause = self.signer.find_signable_clause(vtxo).await
+					.context(vtxo.id())
+					.context("no signable clause for vtxo")?;
+
+				let input = TxIn {
+					previous_output: vtxo.point(),
+					script_sig: ScriptBuf::new(),
+					sequence: clause.sequence().unwrap_or(Sequence::ZERO),
+					witness: Witness::new(),
+				};
+
+				// TxIn base weight (non-witness) + witness weight
+				total_input_weight += 4 * input.base_size() + clause.witness_size(vtxo);
+				total_input_amount += vtxo.amount();
+
+				inputs.push(input);
+				clauses.push(Some(clause));
+			}
+
+			slog!(PreparingVtxoClaim, vtxo_id: vtxo.id(), policy: vtxo.policy().policy_type(),
+				value: vtxo.amount(),
+			);
+		}
 
 		let lock_time = self.sync_height().height.to_locktime()
-			.expect("valid block height");
+			.context("invalid claim locktime")?;
 
 		// Output weight (non-witness data * 4)
 		// TxOut: 8 bytes value + varint script_pubkey_len + script_pubkey
@@ -686,7 +729,7 @@ impl Watchman {
 		let fee = fee_rate.fee_wu(total_weight)
 			.context("fee computation overflow")?;
 		let output_amount = match total_input_amount.checked_sub(fee) {
-			Some(rem) if rem >= P2TR_DUST => rem,
+			Some(rem) if rem >= P2TR_DUST || payout_outputs.is_some() => rem,
 			_ => bail!("insufficient funds: input {} < fee {}", total_input_amount, fee),
 		};
 
@@ -695,14 +738,42 @@ impl Watchman {
 			value: output_amount,
 		};
 
-		let tx = Transaction {
-			version: bitcoin::transaction::Version::TWO,
+		let mut tx = Transaction {
+			version: if payout_outputs.is_some() {
+				bitcoin::transaction::Version::non_standard(3)
+			} else { bitcoin::transaction::Version::TWO },
 			lock_time,
 			input: inputs,
-			output: vec![output],
+			output: payout_outputs.unwrap_or_else(|| vec![output]),
 		};
 
-		self.sign_claim_inputs(vtxos, &clauses, tx).await
+		// Sign all inputs
+		let prevouts = vtxos.iter().map(|vtxo| vtxo.txout()).collect::<Vec<_>>();
+		let prevouts = sighash::Prevouts::All(&prevouts);
+
+		let mut sighash_cache = sighash::SighashCache::new(&mut tx);
+		for (input_idx, (vtxo, clause)) in vtxos.iter().zip(&clauses).enumerate() {
+			if let Some(clause) = clause {
+				let witness = self.signer.sign_input_with_clause(
+					vtxo, clause, input_idx, &mut sighash_cache, &prevouts,
+				).await.with_context(|| format!(
+					"failed to sign script-spend input {} of tx {}",
+					input_idx, sighash_cache.transaction().compute_txid(),
+				))?;
+				*sighash_cache.witness_mut(input_idx).unwrap() = witness;
+			} else {
+				// keyspend
+				let witness = self.signer.sign_input_with_keyspend(
+					vtxo, input_idx, &mut sighash_cache, &prevouts,
+				).await.with_context(|| format!(
+					"failed to sign key-spend input {} of tx {}",
+					input_idx, sighash_cache.transaction().compute_txid(),
+				))?;
+				*sighash_cache.witness_mut(input_idx).unwrap() = witness;
+			}
+		}
+
+		Ok(tx)
 	}
 
 	/// Process vtxos that need to be progressed.

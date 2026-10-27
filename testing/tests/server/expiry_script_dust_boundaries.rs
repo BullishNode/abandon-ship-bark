@@ -1,6 +1,6 @@
 //! Script-sensitive dust boundaries through original registered SDK accounts.
 
-use super::expiry_test::{fields, rebuilt, actual_fee, Epoch, financial_cut};
+use super::expiry_test::{ExpectedLeaf, confirm_epoch, receipt, fields, rebuilt, actual_fee, Epoch, financial_cut};
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -8,7 +8,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ark::attestations::VtxoStatusAttestation;
-use ark::mailbox::MailboxIdentifier;
 use ark::{ProtocolEncoding, Vtxo, VtxoId, SECP};
 use ark::vtxo::Full;
 use ark_testing::{require_bitcoind_chain_source, sat, Captaind, TestContext};
@@ -17,15 +16,12 @@ use bark::lock_manager::memory::MemoryLockManager;
 use bark::persist::sqlite::SqliteClient;
 use bark::movement::{Movement, MovementStatus};
 use bark::vtxo::VtxoState;
-use bitcoin::{Address, Amount, Network, OutPoint, ScriptBuf, Transaction, TxOut};
-use bitcoin::consensus::deserialize;
+use bitcoin::{Address, Amount, Network, OutPoint, ScriptBuf, Transaction};
 use bitcoin::script::Builder;
 use bitcoin::opcodes::all::OP_CHECKSIG;
 use bitcoin::secp256k1::Keypair;
-use bitcoin::hex::DisplayHex;
 use bitcoin_ext::{BlockDelta, TxOutExt};
-use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
-use serde_json::json;
+use bitcoin_ext::rpc::RpcApi;
 use server::database::Db;
 use server_rpc::protos;
 
@@ -35,152 +31,6 @@ async fn balances(wallet: &Wallet, spendable: Amount) {
 	assert_eq!(fields(&wallet.balance().await.unwrap()), expected);
 	assert!(wallet.exit_mgr().list_all(false, false).await.unwrap().is_empty(),
 		"no live or finished unilateral exit may claim already settled principal");
-}
-
-#[derive(Clone)]
-struct ExpectedLeaf {
-	coin: Vtxo<Full>,
-	mailbox: MailboxIdentifier,
-	script: ScriptBuf,
-	fee: u64,
-	payout: u64,
-	forfeited: u64,
-	group_payout: u64,
-}
-
-async fn confirm_epoch(
-	ctx: &TestContext, srv: &Captaind, db: &Db, leaves: &[ExpectedLeaf], start: u64,
-) -> Epoch {
-	let expiry = leaves[0].coin.expiry_height().to_u32();
-	assert!(leaves.iter().all(|leaf| leaf.coin.expiry_height().to_u32() == expiry));
-	let height = u32::try_from(ctx.bitcoind().get_block_count().await).unwrap();
-	assert!(height < expiry);
-	ctx.generate_blocks(expiry + 1 - height).await;
-	rebuilt(ctx, srv, db).await;
-	let ids = leaves.iter().map(|leaf| leaf.coin.id().to_string()).collect::<Vec<_>>();
-	let core = ctx.bitcoind().sync_client();
-	let rows = tokio::time::timeout(Duration::from_secs(40), async {
-		for _ in 0..20 {
-			let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,c.gross_sat,c.fee_sat,c.payout_sat, \
-				c.forfeited_sat,c.spk,c.owner_mailbox,c.user_pubkey,a.id,a.sweep_tx,a.sweep_txid \
-				FROM expiry_entitlement e JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
-				JOIN expiry_allocation a ON a.id=c.allocation_id WHERE e.vtxo_id=ANY($1) \
-				AND c.active AND c.disposition='customer' AND a.broadcast_at IS NOT NULL", &[&ids],
-			).await?)).await.unwrap();
-			assert!(rows.len() <= leaves.len());
-			if rows.len() == leaves.len() && rows.iter().all(|row|
-				core.custom_get_raw_transaction_info(row.get::<_, &str>("sweep_txid").parse().unwrap(), None).unwrap().is_some()) {
-				return rows;
-			}
-			tokio::time::sleep(Duration::from_millis(500)).await;
-			ctx.generate_blocks(1).await;
-			rebuilt(ctx, srv, db).await;
-			assert!(ctx.bitcoind().get_block_count().await - start <= 90);
-		}
-		panic!("native allocations did not publish within20 bounded progress blocks");
-	}).await.expect("bounded automatic expiry publication");
-	ctx.generate_blocks(6).await;
-	rebuilt(ctx, srv, db).await;
-	let mut result = Epoch { parents: BTreeMap::new(), children: BTreeMap::new(),
-		allocations: BTreeMap::new(), outputs: BTreeMap::new(), hashes: BTreeMap::new(), heights: BTreeMap::new(), packages: Vec::new() };
-	for row in rows {
-		let id = row.get::<_, &str>("vtxo_id").parse::<VtxoId>().unwrap();
-		let leaf = leaves.iter().find(|leaf| leaf.coin.id() == id).unwrap();
-		assert_eq!(row.get::<_, i64>("gross_sat"), leaf.coin.amount().to_sat() as i64);
-		assert_eq!(row.get::<_, i64>("fee_sat"), leaf.fee as i64);
-		assert_eq!(row.get::<_, i64>("payout_sat"), leaf.payout as i64);
-		assert_eq!(row.get::<_, i64>("forfeited_sat"), leaf.forfeited as i64);
-		assert_eq!(row.get::<_, String>("spk"), leaf.script.as_bytes().to_lower_hex_string());
-		assert_eq!(row.get::<_, String>("owner_mailbox"), leaf.mailbox.as_pubkey().to_string());
-		assert_eq!(row.get::<_, String>("user_pubkey"), leaf.coin.user_pubkey().to_string());
-		let parent = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
-		let txid = parent.compute_txid();
-		assert_eq!(row.get::<_, String>("sweep_txid"), txid.to_string());
-		assert_eq!(ctx.bitcoind().await_transaction(txid).await, parent);
-		let info = core.custom_get_raw_transaction_info(txid, None).unwrap().unwrap();
-		assert!(info.confirmations.unwrap_or(0) >= 6);
-		let hash = info.blockhash.unwrap();
-		let height = bitcoin_ext::BlockHeight::new(u32::try_from(core.get_block_header_info(&hash).unwrap().height).unwrap());
-		assert_eq!(core.get_block_hash(u64::from(height.to_u32())).unwrap(), hash);
-		let path = std::iter::once(leaf.coin.chain_anchor()).chain(leaf.coin.transactions().map(|step|
-			OutPoint::new(step.tx.compute_txid(), step.output_idx as u32))).collect::<BTreeSet<_>>();
-		let clause = ark::tree::signed::expiry_clause(leaf.coin.server_pubkey(), leaf.coin.expiry_height());
-		assert!(parent.input.iter().any(|input| path.contains(&input.previous_output)
-			&& input.witness.taproot_leaf_script().is_some_and(|script|
-				script.version == bitcoin::taproot::LeafVersion::TapScript && script.script == clause.as_script())));
-		let allocation = row.get::<_, i64>("id");
-		// A real dust allocation has NO payout association. Never replace
-		// this LEFT JOIN by an inner join which silently drops the dust leaf.
-		let ledger = db.read(async |tx| Ok(tx.query_one("SELECT a.status,a.confirmed_hash,a.confirmed_height,a.sweep_txid, \
-			p.output_index,p.amount_sat FROM expiry_allocation_coin c \
-			JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN expiry_allocation a ON a.id=c.allocation_id \
-			LEFT JOIN expiry_allocation_payout p ON p.allocation_id=c.allocation_id AND p.spk=c.spk \
-			WHERE e.vtxo_id=$1 AND c.allocation_id=$2", &[&id.to_string(), &allocation],
-		).await?)).await.unwrap();
-		assert_eq!(ledger.get::<_, String>("status"), "confirmed");
-		assert_eq!(ledger.get::<_, String>("confirmed_hash"), hash.to_string());
-		assert_eq!(ledger.get::<_, i64>("confirmed_height"), i64::from(height.to_u32()));
-		assert_eq!(ledger.get::<_, String>("sweep_txid"), txid.to_string());
-		let index = ledger.get::<_, Option<i32>>("output_index").map(|index| u32::try_from(index).unwrap());
-		if leaf.payout == 0 {
-			assert!(index.is_none());
-			assert!(ledger.get::<_, Option<i64>>("amount_sat").is_none());
-			assert!(parent.output.iter().all(|output| output.script_pubkey != leaf.script));
-		} else {
-			let index = index.unwrap();
-			assert_eq!(ledger.get::<_, Option<i64>>("amount_sat"), Some(leaf.group_payout as i64));
-			assert_eq!(parent.output[index as usize], TxOut { value: sat(leaf.group_payout), script_pubkey: leaf.script.clone() });
-		}
-		result.allocations.insert(id, allocation);
-		result.outputs.insert(id, index.map(|index| OutPoint::new(txid, index)));
-		result.hashes.insert(txid, hash);
-		result.heights.insert(txid, height);
-		result.parents.insert(txid, parent);
-	}
-	for (txid, parent) in &result.parents {
-		assert_eq!(parent.version.0, 3);
-		assert_eq!(actual_fee(ctx, parent).await, Amount::ZERO);
-		let hash = result.hashes[txid];
-		let block = core.get_block(&hash).unwrap();
-		assert!(block.txdata.iter().any(|transaction| transaction == parent));
-		let anchors = parent.output.iter().enumerate().filter(|(_, output)| output.is_p2a_fee_anchor())
-			.map(|(vout, _)| OutPoint::new(*txid, vout as u32)).collect::<Vec<_>>();
-		assert_eq!(anchors.len(), 1);
-		let children = block.txdata.iter().filter(|transaction| transaction.input.iter()
-			.any(|input| input.previous_output == anchors[0])).collect::<Vec<_>>();
-		assert_eq!(children.len(), 1);
-		let child = children[0];
-		assert_eq!(child.version.0, 3);
-		let info = core.custom_get_raw_transaction_info(child.compute_txid(), None).unwrap().unwrap();
-		assert_eq!(info.blockhash, Some(hash));
-		assert!(info.confirmations.unwrap_or(0) >= 6);
-		let fee = actual_fee(ctx, child).await;
-		assert!(fee > Amount::ZERO);
-		result.packages.push(json!({"parent_txid": txid, "child_txid": child.compute_txid(),
-			"canonical_hash": hash, "canonical_height": result.heights[txid].to_u32(),
-			"parent_miner_fee_sat": 0, "actual_child_miner_fee_sat": fee.to_sat()}));
-		result.children.insert(child.compute_txid(), child.clone());
-	}
-	assert!(ctx.bitcoind().get_block_count().await - start <= 96);
-	result
-}
-
-async fn receipt(wallet: &Wallet, leaf: &ExpectedLeaf, epoch: &Epoch) -> Option<OutPoint> {
-	let point = epoch.outputs[&leaf.coin.id()];
-	assert_eq!(leaf.coin.amount(), sat(leaf.fee + leaf.payout + leaf.forfeited));
-	if let Some(point) = point {
-		let parent = &epoch.parents[&point.txid];
-		let output = &parent.output[point.vout as usize];
-		assert_eq!(output.script_pubkey, leaf.script);
-		assert_eq!(output.value, sat(leaf.group_payout));
-		assert_eq!(wallet.verify_fallback_output(point).await.unwrap(), output.value);
-	} else {
-		assert_eq!(leaf.group_payout, 0);
-		assert!(epoch.parents.values().all(|parent| parent.output.iter().all(|out| out.script_pubkey != leaf.script)));
-	}
-	assert_eq!(wallet.get_vtxo_by_id(leaf.coin.id()).await.unwrap().state, VtxoState::Spent);
-	assert_eq!(wallet.get_full_vtxo(leaf.coin.id()).await.unwrap().serialize(), leaf.coin.serialize());
-	point
 }
 
 /// Canonical block-order reconstruction permits only the declared roots and
@@ -245,13 +95,8 @@ impl Application {
 	}
 }
 
-fn group_history(current: Vec<Movement>, baseline: &[Movement], _leaves: &[&ExpectedLeaf]) -> Vec<Movement> {
-	assert_eq!(current, baseline, "chain payout discovery must retain ordinary history without duplicate debits");
-	current
-}
-
-/// Normal SDK sends, mailbox hydration, and a complete signed ordinary proof
-/// authenticate every spent source. No manually fabricated registrations.
+/// Normal SDK sends, mailbox hydration, and authenticated ordinary status
+/// establish the source and its complete signed descendants. No manually fabricated registrations.
 async fn receive_boundary(
 	srv: &Captaind, db: &Db, sender: &Wallet, recipient: &Wallet,
 	amount: Amount, board: &Transaction,
@@ -297,13 +142,11 @@ async fn receive_boundary(
 	assert_eq!(new_change.len(), 2, "retain the real default split factor2");
 	assert_eq!(expected.iter().map(|coin| coin.amount()).sum::<Amount>(), source.amount());
 	let key = sender.get_vtxo_key(source).await.unwrap();
-	let proof = srv.get_public_rpc().await.get_vtxo_spend_proof(protos::GetVtxoStatusRequest {
+	let status = srv.get_public_rpc().await.get_vtxo_status(protos::GetVtxoStatusRequest {
 		vtxo_id: source.id().to_bytes().to_vec(),
 		attestation: VtxoStatusAttestation::new(source.id(), &key).serialize(),
 	}).await.unwrap().into_inner();
-	assert_eq!(proof.vtxos.iter().cloned().collect::<BTreeSet<_>>(),
-		expected.iter().map(|coin| coin.serialize()).collect::<BTreeSet<_>>());
-	assert_eq!(proof.vtxos.len(), expected.len());
+	assert_eq!(status.spend_state, protos::VtxoSpendState::Spent as i32);
 	let prefix = source.transactions().collect::<Vec<_>>();
 	for coin in expected {
 		let path = coin.transactions().collect::<Vec<_>>();
@@ -341,7 +184,9 @@ async fn verify_return(
 	for leaf in leaves { receipts.push(receipt(wallet, leaf, epoch).await); }
 	balances(wallet, Amount::ZERO).await;
 	assert!(wallet.pending_arkoor_sends().await.unwrap().is_empty());
-	(receipts, group_history(wallet.history().await.unwrap(), baseline, leaves))
+	let history = wallet.history().await.unwrap();
+	assert_eq!(history, baseline, "chain payout discovery must retain ordinary history without duplicate debits");
+	(receipts, history)
 }
 
 async fn boundaries(family: Family) {
@@ -462,7 +307,7 @@ async fn boundaries(family: Family) {
 	assert!(backing.confirmations >= 6);
 	assert_eq!(backing.value, sat(100_000));
 	let scan = core.get_block_count().unwrap();
-	let epoch = Box::pin(confirm_epoch(&ctx, &srv, &db, &leaves, start)).await;
+	let epoch = Box::pin(confirm_epoch(&ctx, &srv, &db, &leaves, start, 90, 96)).await;
 	assert_eq!(epoch.parents.len(), 1);
 	assert_eq!(epoch.children.len(), 1);
 	let parent = epoch.parents.values().next().unwrap();

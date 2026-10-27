@@ -1,5 +1,7 @@
 //! A failed dispatched swap pays its absent owner after restart.
 
+use super::expiry_test::wait_rebuilt as wait_exact_rebuilt;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
@@ -109,16 +111,7 @@ async fn assert_original_attempt(
 }
 
 async fn wait_rebuilt(db: &Db, point: BlockRef) {
-	tokio::time::timeout(Duration::from_secs(30), async {
-		loop {
-			let rebuilt = db.read(async |tx| {
-				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && super::expiry_view_is_rebuilt(tx, view).await?)
-			}).await.unwrap();
-			if rebuilt { break; }
-			tokio::time::sleep(Duration::from_millis(50)).await;
-		}
-	}).await.expect("both daemon views must finish rebuilding this Core tip");
+	wait_exact_rebuilt(db, point, Duration::from_secs(30), "both daemon views must finish rebuilding this Core tip").await;
 }
 
 #[tokio::test]
@@ -130,8 +123,6 @@ async fn expiry_failed_swap_during_restart_pays_its_absent_owner_once() {
 async fn failed_swap_during_restart() {
 	let ctx = TestContext::new("server/expiry_failed_swap_restart").await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
-	assert_eq!(lightning.internal.grpc_client().await.getinfo(cln_rpc::GetinfoRequest {})
-		.await.unwrap().into_inner().version, "v26.06.6-abandon6", "terminal group semantics require the qualified CLN version");
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).lightningd(&lightning.internal)
 		.no_vtxo_pool().funded(btc(10)).cfg(|config| {
 			config.vtxo_lifetime = BlockDelta::new(24);

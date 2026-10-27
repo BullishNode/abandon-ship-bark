@@ -1,6 +1,7 @@
 //! Durable invalidation and completed-sync acknowledgments for payout work.
 
 use anyhow::Context;
+use tokio_postgres::Row;
 use bitcoin::BlockHash;
 use bitcoin_ext::{BlockHeight, BlockRef};
 use bitcoind_async_client::traits::Reader;
@@ -39,7 +40,7 @@ impl ExpiryChainListener {
 	/// authorize a rebuild. Initial invalidation is also durable across crashes.
 	pub async fn start(db: Db, process: BlockTable) -> anyhow::Result<Self> {
 		db.write(async |t| {
-			t.invalidate_expiry_chain(BlockHeight::ZERO).await?;
+			t.invalidate_expiry_chain().await?;
 			t.execute("DELETE FROM expiry_sync_ack WHERE process=$1", &[&process_name(process)]).await?;
 			Ok(())
 		}).await?;
@@ -52,8 +53,8 @@ impl ChainEventListener for ExpiryChainListener {
 	async fn on_block_added(&self, _block: &BlockData) -> anyhow::Result<()> { Ok(()) }
 	async fn on_mempool_update(&self, _mempool: &RawMempool) -> anyhow::Result<()> { Ok(()) }
 
-	async fn on_reorg(&self, fork: BlockRef) -> anyhow::Result<()> {
-		self.db.write(async |t| t.invalidate_expiry_chain(fork.height).await).await
+	async fn on_reorg(&self, _fork: BlockRef) -> anyhow::Result<()> {
+		self.db.write(async |t| t.invalidate_expiry_chain().await).await
 	}
 
 	async fn on_sync_complete(&self, point: BlockRef) -> anyhow::Result<()> {
@@ -72,10 +73,8 @@ impl ChainEventListener for ExpiryChainListener {
 }
 
 impl Tx<'_> {
-	pub async fn invalidate_expiry_chain(&self, fork: BlockHeight) -> anyhow::Result<()> {
-		self.execute("UPDATE expiry_chain_view SET generation=generation+1, \
-			invalid_from=CASE WHEN invalid THEN LEAST(invalid_from,$1) ELSE $1 END, invalid=TRUE WHERE id=1",
-			&[&i64::from(fork)]).await?;
+	pub async fn invalidate_expiry_chain(&self) -> anyhow::Result<()> {
+		self.execute("UPDATE expiry_chain_view SET generation=generation+1, invalid=TRUE WHERE id=1", &[]).await?;
 		Ok(())
 	}
 
@@ -114,18 +113,29 @@ impl Tx<'_> {
 		Ok(n == 1)
 	}
 
-	/// Hold this shared row lock through decision commit or transaction broadcast.
-	/// Invalidation takes the exclusive lock, serializing it with both callers.
+	/// Readiness polling does not need another reconstruction at an unchanged
+	/// completed view. Financial sweeps still rebuild unconditionally.
+	pub async fn expiry_view_is_rebuilt(&self, token: ExpiryViewToken) -> anyhow::Result<bool> {
+		let row = self.query_one(EXPIRY_VIEW, &[]).await?;
+		Ok(matches_rebuilt_view(&row, token))
+	}
+
+	/// Keep the shared lock through decision commit or publication. Invalidation
+	/// takes the exclusive lock, so this check cannot be a read-only probe.
 	pub async fn lock_valid_expiry_view(&self, token: ExpiryViewToken) -> anyhow::Result<()> {
-		let row = self.query_one("SELECT generation,invalid,rebuilt_captaind_height,rebuilt_captaind_hash, \
-			rebuilt_watchmand_height,rebuilt_watchmand_hash FROM expiry_chain_view WHERE id=1 FOR SHARE", &[]).await?;
-		ensure!(!row.get::<_, bool>("invalid") && row.get::<_, i64>("generation") == token.generation,
-			"expiry chain view is invalidated");
-		ensure!(row.get::<_, Option<i64>>("rebuilt_captaind_height") == Some(i64::from(token.captaind.height))
-			&& row.get::<_, Option<&str>>("rebuilt_captaind_hash") == Some(token.captaind.hash.to_string().as_str())
-			&& row.get::<_, Option<i64>>("rebuilt_watchmand_height") == Some(i64::from(token.watchmand.height))
-			&& row.get::<_, Option<&str>>("rebuilt_watchmand_hash") == Some(token.watchmand.hash.to_string().as_str()),
-			"expiry view token does not identify the rebuilt view");
+		let row = self.query_one(&format!("{EXPIRY_VIEW} FOR SHARE"), &[]).await?;
+		ensure!(matches_rebuilt_view(&row, token), "expiry view is invalidated or differs from the rebuilt view");
 		Ok(())
 	}
+}
+
+const EXPIRY_VIEW: &str = "SELECT generation,invalid,rebuilt_captaind_height,rebuilt_captaind_hash, \
+	rebuilt_watchmand_height,rebuilt_watchmand_hash FROM expiry_chain_view WHERE id=1";
+
+fn matches_rebuilt_view(row: &Row, token: ExpiryViewToken) -> bool {
+	!row.get::<_, bool>("invalid") && row.get::<_, i64>("generation") == token.generation
+		&& row.get::<_, Option<i64>>("rebuilt_captaind_height") == Some(i64::from(token.captaind.height))
+		&& row.get::<_, Option<&str>>("rebuilt_captaind_hash") == Some(token.captaind.hash.to_string().as_str())
+		&& row.get::<_, Option<i64>>("rebuilt_watchmand_height") == Some(i64::from(token.watchmand.height))
+		&& row.get::<_, Option<&str>>("rebuilt_watchmand_hash") == Some(token.watchmand.hash.to_string().as_str())
 }

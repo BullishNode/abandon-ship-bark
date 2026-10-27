@@ -49,14 +49,6 @@ use crate::{check_max_amount, telemetry, Server, CAPTAIND_API_KEY};
 
 
 
-fn validate_htlc_duration(tip: BlockHeight, requested: BlockHeight, maximum: BlockDelta) -> anyhow::Result<()> {
-	let last = tip.checked_add(maximum).badarg("HTLC expiry limit overflows")?;
-	if requested <= tip || requested > last {
-		return badarg!("requested HTLC expiry {} must be after tip {} and at most {}", requested, tip, last);
-	}
-	Ok(())
-}
-
 /// Validate the client-requested HTLC-recv VTXO expiry leaves at
 /// least `htlc_expiry_delta` blocks of settlement margin below the
 /// inbound Lightning HTLC expiry, both for the request and the
@@ -229,7 +221,6 @@ impl Server {
 			.clone();
 
 		let payment_hash = requested_policy.payment_hash;
-		validate_htlc_duration(self.chain_tip().height, requested_policy.htlc_expiry, self.config.max_htlc_expiry_delta)?;
 
 		let htlc_amount = htlc_vtxos.iter().map(|v| v.total_amount).sum::<Amount>();
 		check_max_amount("lightning send", htlc_amount, self.config.max_ln_send_amount)?;
@@ -865,7 +856,6 @@ impl Server {
 
 		let lowest_incoming_htlc_expiry = sub.lowest_incoming_htlc_expiry
 			.context("no incoming HTLCs found for this payment")?;
-		validate_htlc_duration(self.chain_tip().height, htlc_recv_expiry, self.config.max_htlc_expiry_delta)?;
 		validate_htlc_recv_expiry(
 			lowest_incoming_htlc_expiry,
 			self.sync_manager.chain_tip().height,

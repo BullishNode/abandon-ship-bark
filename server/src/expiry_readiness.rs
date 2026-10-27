@@ -312,8 +312,8 @@ impl Server {
 		).await).await {
 			Ok(Some(group)) => info!(
 				allocation_id = group.id,
-				inputs = group.inputs.len(),
-				dropped = group.dropped.len(),
+				inputs = group.inputs,
+				dropped = group.dropped,
 				"Expiry payout decision committed"
 			),
 			Ok(None) => {},

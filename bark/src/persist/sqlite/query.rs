@@ -324,6 +324,19 @@ pub fn store_vtxo_with_initial_state(
 	Ok(())
 }
 
+/// Update material without changing identity, ownership or state history.
+pub fn update_vtxo_witnesses(tx: &Transaction, vtxo: &Vtxo<Full>) -> anyhow::Result<bool> {
+	ensure!(vtxo.has_all_witnesses(), "replacement VTXO witnesses are incomplete");
+	let Some(stored) = get_full_vtxo_by_id(tx, vtxo.id())? else { return Ok(false); };
+	ensure!(stored.to_bare().serialize() == vtxo.to_bare().serialize(), "replacement VTXO changes its bare identity");
+	let weight = vtxo.transactions().try_fold(0_u64, |sum, step|
+		sum.checked_add(step.tx.weight().to_wu()).context("VTXO exit weight overflow"))?;
+	let changed = tx.execute("UPDATE bark_vtxo SET raw_genesis=?1,exit_depth=?2,exit_tx_weight=?3 WHERE id=?4",
+		rusqlite::params![vtxo.serialize_genesis(), i64::from(vtxo.exit_depth()), i64::try_from(weight)?, vtxo.id().to_string()])?;
+	ensure!(changed == 1, "VTXO disappeared during witness update");
+	Ok(true)
+}
+
 pub fn store_round_state(
 	conn: &Connection,
 	state: &RoundState,

@@ -1,4 +1,0 @@
-- Release inputs after a permanent Lightning admission refusal
-  Use the existing abort path before cosigning so refused sends release their
-  input locks. Temporary failures still retry.
-  [#50](https://github.com/BullishNode/abandon-ship-bark/pull/50)

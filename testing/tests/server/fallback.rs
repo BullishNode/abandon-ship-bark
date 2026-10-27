@@ -13,7 +13,7 @@ async fn fallback_fresh_schema_reopens_concurrently_without_resetting_state() {
 	ctx.init_central_postgres().await;
 	let config = ctx.new_postgres(&ctx.test_name).await;
 	let db = server::database::Db::create(&config).await.unwrap();
-	db.write(async |tx| tx.invalidate_expiry_chain(bitcoin_ext::BlockHeight::ZERO).await).await.unwrap();
+	db.write(async |tx| tx.invalidate_expiry_chain().await).await.unwrap();
 	let client = ctx.postgres_manager().database_client(Some(&config.name)).await;
 	let history = client.query("SELECT version, checksum FROM refinery_schema_history ORDER BY version", &[]).await.unwrap()
 		.into_iter().map(|r| (r.get::<_, i32>(0), r.get::<_, String>(1))).collect::<Vec<_>>();

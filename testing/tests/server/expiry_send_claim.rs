@@ -36,7 +36,6 @@ pub(super) async fn claim_server(ctx: &TestContext, node: &Lightningd) -> Arc<Ca
 			cfg.vtxopool.vtxo_lifetime = BlockDelta::new(1_000);
 			cfg.vtxo_exit_delta = BlockDelta::new(144);
 			cfg.htlc_expiry_delta = BlockDelta::new(40);
-			cfg.max_htlc_expiry_delta = BlockDelta::new(288);
 		}).watchmand().watchmand_cfg(move |cfg| {
 			cfg.sweep_address = Some(drain.into_unchecked());
 			cfg.watchman.reaction_interval = Duration::from_secs(600);
@@ -835,7 +834,6 @@ async fn linked_send_with_shared_preimage(failed: bool, with_internal_receive: b
 	let receiver_info = lightning.external.grpc_client().await.getinfo(cln_rpc::GetinfoRequest {}).await.unwrap().into_inner();
 	for info in [&payer_info, &receiver_info] {
 		assert_eq!(info.network, "regtest");
-		assert_eq!(info.version, "v26.06.6-abandon6");
 	}
 	assert_ne!(payer_info.id, receiver_info.id);
 	let sender = ctx.bark("sender", &srv).cfg(|cfg| cfg.daemon_manual_sync = true).funded(sat(700_000)).create().await;

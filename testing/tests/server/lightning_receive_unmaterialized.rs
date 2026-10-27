@@ -111,7 +111,7 @@ async fn rebuilt(ctx: &TestContext, db: &Db) {
 		loop {
 			let done = db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && super::expiry_view_is_rebuilt(tx, view).await?)
+				Ok(view.captaind == point && view.watchmand == point && tx.expiry_view_is_rebuilt(view).await?)
 			}).await.unwrap();
 			if done { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;

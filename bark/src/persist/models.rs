@@ -132,7 +132,7 @@ pub(crate) struct RoundCheckpoint {
 
 impl RoundCheckpoint {
 	pub(crate) fn before_forfeits(&self, outputs: &[Vtxo<Full>], funding_tx: &Transaction, unlock_hash: UnlockHash) -> StoredRoundState {
-		let state = RoundState { done: false, onchain_recovery: false, participation: self.participation.clone(),
+		let state = RoundState { done: false, participation: self.participation.clone(),
 			flow: RoundFlowState::Finished { funding_tx: funding_tx.clone(), unlock_hash },
 			new_vtxos: outputs.to_vec(), sent_forfeit_sigs: true,
 			movement_id: self.movement_id, fallback_refusal: self.fallback_refusal };
@@ -531,17 +531,12 @@ pub struct SerdeRoundState<'a> {
 	sent_forfeit_sigs: bool,
 	#[serde(default)]
 	fallback_refusal: Option<FallbackRefusal>,
-	// MessagePack stores this struct positionally. New optional fields must
-	// remain at the end so existing binding checkpoints keep their meaning.
-	#[serde(default)]
-	onchain_recovery: bool,
 }
 
 impl<'a> From<&'a RoundState> for SerdeRoundState<'a> {
 	fn from(state: &'a RoundState) -> Self {
 		Self {
 			done: state.done,
-			onchain_recovery: state.onchain_recovery,
 			participation: (&state.participation).into(),
 			movement_id: state.movement_id,
 			flow: (&state.flow).into(),
@@ -556,7 +551,6 @@ impl<'a> From<SerdeRoundState<'a>> for RoundState {
 	fn from(state: SerdeRoundState<'a>) -> Self {
 		Self {
 			done: state.done,
-			onchain_recovery: state.onchain_recovery,
 			participation: state.participation.into(),
 			movement_id: state.movement_id,
 			flow: state.flow.into(),

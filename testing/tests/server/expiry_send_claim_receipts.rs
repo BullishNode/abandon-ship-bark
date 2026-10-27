@@ -417,7 +417,6 @@ async fn internal_server_with_fee(ctx: &TestContext, node: &Lightningd, user_fee
 		cfg.vtxopool.vtxo_targets = vec![server::vtxopool::VtxoTarget { amount: sat(90_000), count: 2 }];
 		cfg.vtxo_exit_delta = BlockDelta::new(144);
 		cfg.htlc_expiry_delta = BlockDelta::new(40);
-		cfg.max_htlc_expiry_delta = BlockDelta::new(288);
 		cfg.max_user_invoice_cltv_delta = BlockDelta::new(240);
 		cfg.invoice_check_interval = Duration::from_secs(1);
 		cfg.receive_htlc_forward_timeout = Duration::from_secs(600);

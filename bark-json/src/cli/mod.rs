@@ -525,8 +525,6 @@ pub enum RoundStatus {
 		#[cfg_attr(feature = "utoipa", schema(value_type = String))]
 		funding_txid: Txid,
 	},
-	/// Emergency self-refresh recovery remains watched for chain reorganizations.
-	OnchainRecovery { claim_confirmed: bool },
 	/// We have unsigned funding transactions that might confirm
 	Pending,
 	/// The round failed
@@ -544,7 +542,6 @@ impl RoundStatus {
 			Self::SyncError { .. } => false,
 			Self::Confirmed { .. } => true,
 			Self::Unconfirmed { .. } => false,
-			Self::OnchainRecovery { .. } => false,
 			Self::Pending { .. } => false,
 			Self::Failed { .. } => true,
 			Self::Canceled => true,
@@ -557,7 +554,6 @@ impl RoundStatus {
 			Self::SyncError { .. } => false,
 			Self::Confirmed { .. } => true,
 			Self::Unconfirmed { .. } => true,
-			Self::OnchainRecovery { claim_confirmed } => *claim_confirmed,
 			Self::Pending { .. } => false,
 			Self::Failed { .. } => false,
 			Self::Canceled => false,
@@ -574,7 +570,6 @@ impl From<bark::round::RoundStatus> for RoundStatus {
 			bark::round::RoundStatus::Unconfirmed { funding_txid } => {
 				Self::Unconfirmed { funding_txid }
 			},
-			bark::round::RoundStatus::OnchainRecovery { claim_confirmed } => Self::OnchainRecovery { claim_confirmed },
 			bark::round::RoundStatus::Pending => Self::Pending,
 			bark::round::RoundStatus::Failed { error } => Self::Failed { error },
 			bark::round::RoundStatus::Canceled => Self::Canceled,

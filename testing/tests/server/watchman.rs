@@ -209,7 +209,7 @@ async fn watchman_sweeps_boards() {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 				Ok(view.captaind.height == tip && view.watchmand.height == tip
 					&& view.captaind.hash == hash && view.watchmand.hash == hash
-					&& !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+					&& tx.expiry_view_is_rebuilt(view).await?)
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -526,7 +526,7 @@ async fn watchman_sweeps_round_vtxos() {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 				Ok(view.captaind.height == tip && view.watchmand.height == tip
 					&& view.captaind.hash == hash && view.watchmand.hash == hash
-					&& !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+					&& tx.expiry_view_is_rebuilt(view).await?)
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -945,7 +945,7 @@ async fn watchman_sweeps_arkoor_vtxos_sender_exit() {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 				Ok(view.captaind.height == tip && view.watchmand.height == tip
 					&& view.captaind.hash == tip_hash && view.watchmand.hash == tip_hash
-					&& !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+					&& tx.expiry_view_is_rebuilt(view).await?)
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -1339,7 +1339,7 @@ async fn watchman_sweeps_arkoor_vtxos_receiver_exit() {
 				if allocated != expected_sources { return Ok(false); }
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 				Ok(view.captaind.height == tip && view.watchmand.height == tip
-					&& view.captaind.hash == hash && view.watchmand.hash == hash && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+					&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -1841,7 +1841,7 @@ async fn watchman_sweeps_lightning_vtxos() {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 				Ok(view.captaind.height == tip && view.watchmand.height == tip
 					&& view.captaind.hash == blockhash && view.watchmand.hash == blockhash
-					&& !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+					&& tx.expiry_view_is_rebuilt(view).await?)
 			}).await.unwrap();
 			let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,a.id,a.sweep_tx \
 				FROM expiry_entitlement e JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
@@ -2209,7 +2209,7 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 			if db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 				Ok(view.captaind.height == tip && view.watchmand.height == tip && view.captaind.hash == hash
-					&& view.watchmand.hash == hash && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+					&& view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -2296,7 +2296,7 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 					if allocated != expected.keys().cloned().collect::<BTreeSet<_>>() { return Ok(false); }
 					let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 					Ok(view.captaind.height == tip && view.watchmand.height == tip && view.captaind.hash == hash
-						&& view.watchmand.hash == hash && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+						&& view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
 				}).await.unwrap() { break; }
 			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
@@ -2462,9 +2462,16 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 	for height in scan_from..=ctx.bitcoind().get_block_count().await {
 		for tx in core.get_block(&core.get_block_hash(height).unwrap()).unwrap().txdata {
 			if tx.input.iter().any(|input| input.previous_output == replacements[0].point()) { claims.insert(tx.compute_txid(), tx.clone()); }
-			if exit_ids.contains(&tx.compute_txid()) || tx.input.iter().any(|input| exit_anchors.contains(&input.previous_output)) { raw_fee(&tx); }
+			let native_fee_child = tx.input.iter().any(|input| exit_anchors.contains(&input.previous_output));
+			if exit_ids.contains(&tx.compute_txid()) || native_fee_child {
+				let fee = raw_fee(&tx);
+				if native_fee_child { assert!(fee > Amount::ZERO); }
+			}
 			for (index, output) in tx.output.iter().enumerate().filter(|(_, output)|
 				destinations.iter().any(|destination| destination.spk == output.script_pubkey) || output.script_pubkey == claim_address.script_pubkey()) {
+				// Upstream CPFP can return wallet change to this unused claim
+				// address. It spends a known exit anchor, not another Ark claim.
+				if native_fee_child && output.script_pubkey == claim_address.script_pubkey() { continue; }
 				observed.insert(OutPoint::new(tx.compute_txid(), index as u32), output.clone());
 			}
 		}
@@ -2740,7 +2747,7 @@ async fn watchman_sweeps_vtxopool_with_exit() {
 			let rebuilt = db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 				Ok(view.captaind.height == tip && view.watchmand.height == tip && view.captaind.hash == hash && view.watchmand.hash == hash
-					&& !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+					&& tx.expiry_view_is_rebuilt(view).await?)
 			}).await.unwrap();
 			if rebuilt && seen == operator_ids.iter().cloned().collect() && packages.values().all(|(parent, child, _)|
 				core.get_raw_transaction(&parent.compute_txid(), None).ok().as_ref() == Some(parent)
@@ -3050,7 +3057,7 @@ async fn watchman_sweeps_offboard_connectors() {
 				if db.read(async |tx| {
 					let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 					Ok(view.captaind.height == tip && view.watchmand.height == tip
-						&& view.captaind.hash == hash && view.watchmand.hash == hash && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+						&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
 				}).await.unwrap() { break; }
 				tokio::time::sleep(Duration::from_millis(50)).await;
 			}
@@ -3332,7 +3339,7 @@ async fn watchman_sweeps_offboard_forfeit_after_confiscation() {
 			if db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 				Ok(view.captaind.height == tip && view.watchmand.height == tip
-					&& view.captaind.hash == hash && view.watchmand.hash == hash && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+					&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -3828,7 +3835,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 			if db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 				Ok(view.captaind.height == tip && view.watchmand.height == tip
-					&& view.captaind.hash == hash && view.watchmand.hash == hash && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+					&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -3939,7 +3946,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 				if db.read(async |tx| {
 					let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 					Ok(view.captaind.height == tip && view.watchmand.height == tip && view.captaind.hash == hash
-						&& view.watchmand.hash == hash && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+						&& view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
 				}).await.unwrap() { break; }
 			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
@@ -4640,7 +4647,7 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 			let rebuilt = db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 				Ok(view.captaind.height == tip && view.watchmand.height == tip && view.captaind.hash == hash
-					&& view.watchmand.hash == hash && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+					&& view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
 			}).await.unwrap();
 			if rebuilt && seen == source_ids.iter().cloned().collect() && packages.values().all(|(parent, child, _)|
 				core.get_raw_transaction(&parent.compute_txid(), None).ok().as_ref() == Some(parent)
@@ -5548,7 +5555,7 @@ async fn expiry_same_owner_fragments(name: &str, small_first: bool) {
 					let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 					Ok(view.captaind.height == tip && view.watchmand.height == tip
 						&& view.captaind.hash == hash && view.watchmand.hash == hash
-						&& !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+						&& tx.expiry_view_is_rebuilt(view).await?)
 				}).await.unwrap();
 				if ready { break; }
 				tokio::time::sleep(Duration::from_millis(50)).await;

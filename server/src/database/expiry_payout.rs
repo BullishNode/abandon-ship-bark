@@ -8,7 +8,7 @@ use bitcoin::consensus::{deserialize, serialize};
 use bitcoin::hex::DisplayHex;
 use bitcoin::secp256k1::PublicKey;
 use bitcoin_ext::TxOutExt;
-use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoPolicy};
+use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoId, VtxoPolicy};
 
 use super::expiry_chain::ExpiryViewToken;
 use super::expiry_lightning::LightningSourceState;
@@ -113,6 +113,25 @@ pub struct PendingExpiryPayout {
 }
 
 impl Tx<'_> {
+	/// Select the winning allocation before matching its actual customer. An
+	/// unregistered change output can use a fresh key in the same immutable
+	/// mailbox as its input owner; a recipient in another mailbox cannot.
+	pub(crate) async fn fallback_customer_vtxos(
+		&self, vtxos: &[(VtxoId, PublicKey)],
+	) -> anyhow::Result<BTreeSet<VtxoId>> {
+		if vtxos.is_empty() { return Ok(BTreeSet::new()); }
+		let ids = vtxos.iter().map(|(id, _)| id.to_string()).collect::<Vec<_>>();
+		let keys = vtxos.iter().map(|(_, key)| key.to_string()).collect::<Vec<_>>();
+		self.query("SELECT q.vtxo_id FROM unnest($1::TEXT[],$2::TEXT[]) q(vtxo_id,user_pubkey) \
+			JOIN (SELECT DISTINCT ON (e.vtxo_id) e.vtxo_id,c.disposition,c.user_pubkey,c.owner_mailbox \
+				FROM expiry_entitlement e JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
+				JOIN expiry_allocation a ON a.id=c.allocation_id WHERE e.vtxo_id=ANY($1) \
+				ORDER BY e.vtxo_id,(a.status='confirmed') DESC,c.active DESC,c.allocation_id DESC \
+			) c ON c.vtxo_id=q.vtxo_id LEFT JOIN expiry_owner_key k ON k.user_pubkey=q.user_pubkey \
+			WHERE c.disposition='customer' AND (c.user_pubkey=q.user_pubkey OR c.owner_mailbox=k.mailbox_pk)",
+			&[&ids,&keys]).await?.into_iter().map(|row| Ok(row.get::<_, &str>("vtxo_id").parse()?)).collect()
+	}
+
 	/// A group is processed as a whole. Individual-input retries would lose its
 	/// cross-tree output aggregation and could charge the output fee twice.
 	pub async fn pending_expiry_payouts(&self) -> anyhow::Result<Vec<PendingExpiryPayout>> {
@@ -273,11 +292,11 @@ impl Tx<'_> {
 		", &[&ids]).await?.is_none(),
 			"cannot split a recovery path reserved for a pending payout");
 		self.execute("
-			INSERT INTO expiry_split_request(vtxo_id,progress_txid,generation)
-			VALUES($1,$2,$3)
-			ON CONFLICT(vtxo_id) DO UPDATE SET progress_txid=EXCLUDED.progress_txid,generation=EXCLUDED.generation
+			INSERT INTO expiry_split_request(vtxo_id,progress_txid)
+			VALUES($1,$2)
+			ON CONFLICT(vtxo_id) DO UPDATE SET progress_txid=EXCLUDED.progress_txid
 		",
-			&[&root.id().to_string(),&txid.to_string(),&view.generation]).await?;
+			&[&root.id().to_string(),&txid.to_string()]).await?;
 		Ok(true)
 	}
 

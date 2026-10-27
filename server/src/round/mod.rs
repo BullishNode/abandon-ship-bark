@@ -1348,38 +1348,36 @@ async fn persist_round(
 		}
 
 		Ok(notifications)
-	}).await;
+	}).await.map(|notifications| {
+		for (mailbox, checkpoint) in notifications {
+			srv.mailbox_manager.notify(mailbox, checkpoint);
+		}
+	});
 
 	telemetry::set_round_step_duration(round_step);
 
-	match result {
-		Err(e) => {
-			if e.is::<crate::error::OwnershipRefusal>() {
-				return Err(RoundError::Recoverable(e));
-			}
-			server_rslog!(FatalStoringRound, round_step,
-				error: format!("{:?}", e),
-				unsigned_funding_tx: serialize(unsigned_funding_tx),
-				vtxo_tree: signed_vtxos.spec.serialize(),
-				input_vtxos: state.all_inputs.keys().copied().collect(),
-			);
+	if let Err(e) = result {
+		if e.is::<crate::error::OwnershipRefusal>() {
+			return Err(RoundError::Recoverable(e));
+		}
+		server_rslog!(FatalStoringRound, round_step,
+			error: format!("{:?}", e),
+			unsigned_funding_tx: serialize(unsigned_funding_tx),
+			vtxo_tree: signed_vtxos.spec.serialize(),
+			input_vtxos: state.all_inputs.keys().copied().collect(),
+		);
 
-			Err(RoundError::Fatal(e))
-		},
-		Ok(notifications) => {
-			for (mailbox, checkpoint) in notifications {
-				srv.mailbox_manager.notify(mailbox, checkpoint);
-			}
-			server_rslog!(RoundFinished, round_step,
-				txid: state.funding_tx.txid(),
-				vtxo_expiry_block_height: state.expiry_height,
-				nb_input_vtxos: state.all_inputs.len(),
-				nb_output_vtxos: signed_vtxos.nb_leaves(),
-				total_output_amount: signed_vtxos.spec.spec.total_required_value(),
-			);
+		Err(RoundError::Fatal(e))
+	} else {
+		server_rslog!(RoundFinished, round_step,
+			txid: state.funding_tx.txid(),
+			vtxo_expiry_block_height: state.expiry_height,
+			nb_input_vtxos: state.all_inputs.len(),
+			nb_output_vtxos: signed_vtxos.nb_leaves(),
+			total_output_amount: signed_vtxos.spec.spec.total_required_value(),
+		);
 
-			Ok(())
-		},
+		Ok(())
 	}
 }
 

@@ -379,7 +379,7 @@ pub(super) async fn wait_partial_confirmation(
 				let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
 				if view.captaind.height != height || view.watchmand.height != height
 					|| view.captaind.hash != expected_hash || view.watchmand.hash != expected_hash
-					|| !super::expiry_view_is_rebuilt(t, view).await?
+					|| !t.expiry_view_is_rebuilt(view).await?
 				{ return Ok(false); }
 				t.lock_valid_expiry_view(view).await?;
 				let recorded = t.query_one("SELECT COUNT(*) FROM expiry_allocation_coin c \
@@ -577,7 +577,7 @@ async fn all_terminal_returns(
 			let rebuilt=db.read(async |t| {
 				let Some(view)=t.expiry_rebuild_token().await? else {return Ok(false);};
 				Ok(view.captaind.height==height && view.watchmand.height==height
-					&& view.captaind.hash==expected_hash && view.watchmand.hash==expected_hash && super::expiry_view_is_rebuilt(t, view).await?)
+					&& view.captaind.hash==expected_hash && view.watchmand.hash==expected_hash && t.expiry_view_is_rebuilt(view).await?)
 			}).await.unwrap();
 			if rebuilt {break;}
 			tokio::time::sleep(Duration::from_millis(50)).await;

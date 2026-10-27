@@ -229,6 +229,14 @@ impl BarkPersister for SqliteClient {
 		Ok(())
 	}
 
+	async fn update_vtxo_witnesses(&self, vtxo: &Vtxo<Full>) -> anyhow::Result<bool> {
+		let mut conn = self.connect()?;
+		let tx = conn.transaction()?;
+		let updated = query::update_vtxo_witnesses(&tx, vtxo)?;
+		tx.commit()?;
+		Ok(updated)
+	}
+
 	async fn get_wallet_vtxo(&self, id: VtxoId) -> anyhow::Result<Option<WalletVtxo>> {
 		let conn = self.connect()?;
 		query::get_wallet_vtxo_by_id(&conn, id)

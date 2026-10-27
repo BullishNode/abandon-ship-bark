@@ -269,9 +269,7 @@ pub struct Config {
 	/// Whether server allows spending expired VTXOs in arkoor
 	#[serde(default)]
 	pub allow_expired_arkoor: bool,
-	/// Bound the duration of new Lightning obligations; settlement can take longer.
-	#[serde(default = "default_max_htlc_expiry_delta")]
-	pub max_htlc_expiry_delta: BlockDelta,
+
 	#[serde(with = "utils::serde::duration")]
 	pub round_interval: Duration,
 	#[serde(with = "utils::serde::duration")]
@@ -485,7 +483,6 @@ pub struct Config {
 	pub round_legacy_hashlock_clauses: bool,
 }
 
-fn default_max_htlc_expiry_delta() -> BlockDelta { BlockDelta::new(288) }
 impl Config {
 	fn load_with_custom_env(
 		config_file: impl AsRef<Path>,
@@ -564,10 +561,6 @@ impl Config {
 		self.bitcoind.validate()?;
 		self.fees.validate()?;
 
-		if self.max_htlc_expiry_delta < self.htlc_send_expiry_delta {
-			bail!("max_htlc_expiry_delta must cover htlc_send_expiry_delta");
-		}
-
 		if self.offboard_check_interval > self.offboard_session_timeout {
 			bail!("Invalid configuration: offboard_check_interval ({:?}) may not \
 				exceed offboard_session_timeout ({:?}), otherwise sessions linger \
@@ -614,7 +607,7 @@ impl Config {
 			bail!("Invalid configuration: max_read_mailbox_items must be at least 1");
 		}
 
-		// At 0 every xpub scan is rejected.
+		// At 0 every xpub scan is rejected; recovery_xpub_nb_keys = 0 disables the rpc instead.
 		if self.max_concurrent_xpub_recoveries == 0 {
 			bail!("Invalid configuration: max_concurrent_xpub_recoveries must be at least 1");
 		}
@@ -768,7 +761,6 @@ mod test {
 
 		cfg.validate().expect("error validating default config");
 	}
-
 
 	#[test]
 	fn default_offboard_fixed_vb_covers_a_two_in_three_out_keyspend() {

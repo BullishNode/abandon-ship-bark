@@ -1,5 +1,7 @@
 //! A real terminal user claim and its backing conflict disappear after regrouping.
 
+use super::expiry_test::wait_rebuilt as wait_exact_rebuilt;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use std::time::Duration;
@@ -253,18 +255,7 @@ async fn decided_obligations(db: &Db, coins: &[String]) -> BTreeMap<String, (i64
 }
 
 async fn rebuilt_generation(db: &Db, point: BlockRef) -> i64 {
-	tokio::time::timeout(Duration::from_secs(30), async {
-		loop {
-			let generation = db.read(async |tx| {
-				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(None); };
-				if view.captaind == point && view.watchmand == point && super::expiry_view_is_rebuilt(tx, view).await? {
-					Ok(Some(view.generation))
-				} else { Ok(None) }
-			}).await.unwrap();
-			if let Some(generation) = generation { break generation; }
-			tokio::time::sleep(Duration::from_millis(50)).await;
-		}
-	}).await.expect("both actual daemon views must rebuild the current Core branch")
+	wait_exact_rebuilt(db, point, Duration::from_secs(30), "both actual daemon views must rebuild the current Core branch").await
 }
 
 async fn assert_final_outcome(

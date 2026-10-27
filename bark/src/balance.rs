@@ -14,16 +14,13 @@ use bitcoin::Amount;
 use bitcoin_ext::BlockHeight;
 use log::{debug, warn};
 
-use ark::{ProtocolEncoding, VtxoId};
+use ark::VtxoId;
 
 use crate::{Wallet, WalletVtxo};
 use crate::actions::{WalletAction, WalletActionCheckpoint};
 use crate::exit::ExitStateKind;
 use crate::fallback::payouts::FallbackSnapshot;
-use crate::movement::{Movement, MovementStatus};
-use crate::persist::models::StoredExit;
-use crate::subsystem::Subsystem;
-use crate::vtxo::{VtxoLockHolder, VtxoState, VtxoStateKind};
+use crate::vtxo::{VtxoState, VtxoStateKind};
 
 /// The different balances of a Bark wallet.
 ///
@@ -60,11 +57,10 @@ pub struct Balance {
 	/// them when a round attempt starts, a delegated one once the server has
 	/// issued the round and its funding transaction has been seen.
 	pub pending_in_round: Amount,
-	/// Sats reserved by a native safety exit, or committed to an on-chain
-	/// unilateral exit and not yet claimed. An abortable safety exit owns an
-	/// exact Movement holder and still counts here while unavailable for Ark
-	/// spending. A manual exit intent that reserves nothing does not: its
-	/// Spendable coin remains in the ordinary balance until commitment.
+	/// Sats in VTXOs whose unilateral exit has committed on-chain but which
+	/// have not been claimed to the on-chain wallet yet. These VTXOs are
+	/// [`crate::vtxo::VtxoStateKind::Exited`] and unusable in the Ark protocol.
+	/// An exit that can still be canceled isn't counted here.
 	pub pending_exit: Amount,
 	/// Sats in board VTXOs that are waiting for enough on-chain confirmations
 	/// to be registered with the Ark server. A board whose funding transaction
@@ -146,21 +142,17 @@ impl Wallet {
 			.map(|(id, coin)| (*id, coin.amount())).collect::<HashMap<_, _>>();
 		if result.is_empty() { return Ok(result); }
 		if owned.len() <= 1 { return Ok(result); }
-		ensure!(owned.len() <= 256, "pending balance overlap exceeds the 256-body verification budget");
-		let ids = owned.keys().copied().collect::<Vec<_>>();
-		let mut bytes = 0usize;
-		let mut steps = 0usize;
-		let mut paths = Vec::new();
-		for id in ids {
-			let body = self.get_full_vtxo(id).await?;
-			bytes = bytes.checked_add(body.serialize().len()).context("pending balance path size overflow")?;
-			steps = steps.checked_add(usize::from(body.exit_depth())).context("pending balance path work overflow")?;
-			ensure!(bytes <= 1_048_576 && steps <= 8_192,
-				"pending balance overlap exceeds its signed-path verification budget");
-			paths.push((id, body.ancestor_ids()));
+		let amounts = owned.iter().map(|(id, coin)| (*id, coin.amount())).collect::<HashMap<_, _>>();
+		let mut cut = result;
+		for (index, id) in owned.keys().enumerate() {
+			let body = self.get_full_vtxo(*id).await?;
+			subtract_owned_descendant(&amounts, &mut cut, *id, &body.ancestor_ids())?;
+			// Bound work per turn, not the wallet's total number of owned coins.
+			// Retain one decoded path at a time instead of accumulating all paths.
+			if (index + 1) % 256 == 0 {
+				tokio::task::yield_now().await;
+			}
 		}
-		let amounts = owned.iter().map(|(id, coin)| (*id, coin.amount())).collect();
-		let cut = owned_pending_cut(&amounts, pending, &paths)?;
 		let inferred = cut.keys().filter(|id| !pending.contains(*id)).copied().collect::<Vec<_>>();
 		if !inferred.is_empty() {
 			// Keep this fence after the original pending ancestor is resolved.
@@ -169,7 +161,6 @@ impl Wallet {
 			let _guard = self.lock_fallback_history(Duration::from_secs(30)).await?;
 			let mut latest = self.inner.db.get_fallback_snapshot().await?;
 			for id in inferred {
-				if latest.verified_ordinary_spends.contains(&id) { continue; }
 				if self.inner.db.get_wallet_vtxo(id).await?.is_some_and(|coin| coin.state != VtxoState::Spent) {
 					latest.awaiting_settlement.insert(id);
 				}
@@ -186,9 +177,12 @@ impl Wallet {
 		// A signed body retained for historic recovery is not another owned
 		// claim. Keep only current positive local ownership and customer
 		// receipt principal; an Operator label cannot synthesize either.
-		let owned = retained.iter().filter(|(id, _)| !fallback.unproven_spent_vtxos.contains(id)
-			&& !fallback.verified_ordinary_spends.contains(id) && !fallback.adopted_payout_vtxos.contains(id)).map(|(id, coin)| (*id, coin.clone()))
-			.collect::<HashMap<_, _>>();
+		let claimed = self.operation_input_ids().await?;
+		let owned = retained.into_iter().filter(|(id, coin)| {
+			!fallback.adopted_payout_vtxos.contains(id)
+				&& (coin.state != (VtxoState::Locked { holder: None })
+					|| fallback.awaiting_settlement.contains(id) || claimed.contains(id))
+		}).collect();
 
 		Ok(owned)
 	}
@@ -285,14 +279,13 @@ impl Wallet {
 			}
 		}
 
-		// Validated recovered bodies without an action holder remain owned,
-		// unavailable value. A preparatory offboard's None lock is not ours.
+		// A previously unanswered recovery can hold this customer claim with
+		// no action holder. Count it only while its fallback status is pending.
 		let claimed = self.operation_input_ids().await?;
-		for id in &fallback.quarantined_vtxos {
-			let Some(vtxo) = vtxos.get(id) else { continue; };
-			if vtxo.state == (VtxoState::Locked { holder: None }) && !claimed.contains(id)
-				&& counted.insert(*id) {
-				balance.awaiting_settlement += principal(vtxo, &pending_principal);
+		for id in &fallback.awaiting_settlement {
+			let Some(coin) = vtxos.get(id) else { continue; };
+			if coin.state == (VtxoState::Locked { holder: None }) && !claimed.contains(id) && counted.insert(*id) {
+				balance.awaiting_settlement += principal(coin, &pending_principal);
 			}
 		}
 
@@ -301,17 +294,6 @@ impl Wallet {
 		let exits = self.inner.db
 			.get_exit_vtxo_entries_with_states(ExitStateKind::LIVE_STATES).await?;
 		for exit in exits {
-			if let Some(coin) = vtxos.get(&exit.vtxo_id)
-				&& let VtxoState::Locked { holder: Some(VtxoLockHolder::Movement { id }) } = &coin.state
-				&& exit.movement_id == Some(*id) && !counted.contains(&coin.id()) {
-				let movement = self.inner.db.get_movement_by_id(*id).await?;
-				if owns_protective_exit_reservation(&exit, &movement, coin) && counted.insert(coin.id()) {
-					// Start/Processing safety exits already reserve real positive
-					// principal, even though their final leaf is not on chain yet.
-					balance.pending_exit += principal(coin, &pending_principal);
-					continue;
-				}
-			}
 			if !exit.state.warrants_exited_vtxo() {
 				continue;
 			}
@@ -332,41 +314,18 @@ impl Wallet {
 	}
 }
 
-/// A native intent alone is not a reservation. Require its pending
-/// movement and its exact live holder; a binding round or another operation
-/// remains accounted for by its own bucket. Call only for already-filtered
-/// positive-owned coins, after decided/unproven/discharged sources are removed.
-fn owns_protective_exit_reservation(exit: &StoredExit, movement: &Movement, coin: &WalletVtxo) -> bool {
-	exit.vtxo_id == coin.id() && exit.movement_id == Some(movement.id)
-		&& coin.state == (VtxoState::Locked { holder: Some(movement.id.into()) })
-		&& movement.status == MovementStatus::Pending
-		&& movement.subsystem.name == Subsystem::EXIT.as_name()
-		&& movement.metadata.get("protective_exit") == Some(&serde_json::Value::Bool(true))
-		&& !movement.metadata.contains_key("protective_round_state")
-		&& !movement.metadata.contains_key("protective_round_movement")
-		&& movement.input_vtxos == [coin.id()]
-}
-
-/// A transient projection of existing local principal, not a new ledger.
-/// One nearest-owned-ancestor assignment per signed path is linear in the
-/// bounded number of path entries, including shared/transitive branches.
-fn owned_pending_cut(
-	owned: &HashMap<VtxoId, Amount>, pending: &BTreeSet<VtxoId>,
-	paths: &[(VtxoId, Vec<VtxoId>)],
-) -> anyhow::Result<HashMap<VtxoId, Amount>> {
-	let mut result = owned.iter().filter(|(id, _)| pending.contains(*id))
-		.map(|(id, amount)| (*id, *amount)).collect::<HashMap<_, _>>();
-	let mut seen = HashSet::new();
-	for (child, path) in paths {
-		ensure!(seen.insert(*child), "pending balance path repeats an owned coin");
-		let amount = owned.get(child).context("pending balance path is not locally owned")?;
-		if let Some(parent) = path.iter().rev().copied().find(|id| *id != *child && owned.contains_key(id)) {
-			let value = result.entry(parent).or_insert(owned[&parent]);
-			*value = value.checked_sub(*amount)
-				.context("signed owned descendants exceed their retained source principal")?;
-		}
+/// Assign each owned descendant to its nearest owned ancestor exactly once.
+fn subtract_owned_descendant(
+	owned: &HashMap<VtxoId, Amount>, result: &mut HashMap<VtxoId, Amount>,
+	child: VtxoId, path: &[VtxoId],
+) -> anyhow::Result<()> {
+	let amount = owned.get(&child).context("pending balance path is not locally owned")?;
+	if let Some(parent) = path.iter().rev().copied().find(|id| *id != child && owned.contains_key(id)) {
+		let value = result.entry(parent).or_insert(owned[&parent]);
+		*value = value.checked_sub(*amount)
+			.context("signed owned descendants exceed their retained source principal")?;
 	}
-	Ok(result)
+	Ok(())
 }
 
 fn principal(coin: &WalletVtxo, pending: &HashMap<VtxoId, Amount>) -> Amount {
@@ -404,42 +363,81 @@ fn held_by<A: WalletAction>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use ark::test_util::VTXO_VECTORS;
-	use crate::exit::ExitState;
-	use crate::movement::{MovementId, MovementSubsystem};
-	use crate::persist::models::wallet_vtxo_from_full;
+
+	#[cfg(feature = "sqlite")]
+	use std::sync::Arc;
+	#[cfg(feature = "sqlite")]
+	use ark::test_util::dummy::DummyTestVtxoSpec;
+	#[cfg(feature = "sqlite")]
+	use crate::{Config, WalletInner, WalletSeed};
+	#[cfg(feature = "sqlite")]
+	use crate::chain::ChainSource;
+	#[cfg(feature = "sqlite")]
+	use crate::exit::Exit;
+	#[cfg(feature = "sqlite")]
+	use crate::lock_manager::memory::MemoryLockManager;
+	#[cfg(feature = "sqlite")]
+	use crate::movement::manager::MovementManager;
+	#[cfg(feature = "sqlite")]
+	use crate::notification::NotificationDispatch;
+	#[cfg(feature = "sqlite")]
+	use crate::persist::{BarkPersister, sqlite::{SqliteClient, helpers::in_memory_db}};
+	#[cfg(feature = "sqlite")]
+	use crate::round::RoundSecretNonces;
+
+	// Exercise the wallet's hydration/projection path, which used to reject
+	// inventories above 256 bodies. No server or chain is needed for this cut.
+	#[tokio::test]
+	#[cfg(feature = "sqlite")]
+	async fn pending_principal_accepts_more_than_256_owned_paths() {
+		let (path, _conn) = in_memory_db();
+		let db = Arc::new(SqliteClient::open(path).unwrap());
+		let network = bitcoin::Network::Regtest;
+		let chain = Arc::new(ChainSource::offline_for_test(network));
+		let notifications = NotificationDispatch::new();
+		let movements = Arc::new(MovementManager::new(db.clone(), notifications.clone()));
+		let exit = Exit::new(db.clone(), chain.clone(), movements.clone()).await.unwrap();
+		let wallet = Wallet { inner: Arc::new(WalletInner {
+			config: Config::network_default(network), db: db.clone(), chain, exit, movements, notifications,
+			lock_manager: Box::new(MemoryLockManager::new()), seed: WalletSeed::new_from_seed(network, &[42; 64]),
+			server: tokio::sync::RwLock::new(None), onchain: None, daemon: parking_lot::Mutex::new(None),
+			last_force_exit_scan_tip: tokio::sync::Mutex::new(None), round_secret_nonces: RoundSecretNonces::new(),
+		}) };
+		let coins = (0..257).map(|index| DummyTestVtxoSpec {
+			amount: Amount::from_sat(20_000_000 + index), ..Default::default()
+		}.build().1).collect::<Vec<_>>();
+		db.store_vtxos(&coins.iter().map(|coin| (coin, &VtxoState::Spendable)).collect::<Vec<_>>()).await.unwrap();
+		let mut snapshot = FallbackSnapshot::default();
+		snapshot.awaiting_settlement.insert(coins[0].id());
+		let cut = wallet.fallback_pending_principal(&snapshot).await.unwrap();
+		assert_eq!(cut.len(), 1);
+		assert_eq!(cut[&coins[0].id()], coins[0].amount());
+
+		// A recovery row with no answered status is not positive ownership.
+		let unknown = &coins[1];
+		db.update_vtxo_state_checked(unknown.id(), VtxoState::Locked { holder: None }, &[VtxoStateKind::Spendable]).await.unwrap();
+		assert!(!wallet.retained_owned_principal(&snapshot).await.unwrap().contains_key(&unknown.id()));
+		snapshot.awaiting_settlement.insert(unknown.id());
+		assert!(wallet.retained_owned_principal(&snapshot).await.unwrap().contains_key(&unknown.id()));
+
+		db.store_fallback_snapshot(&snapshot).await.unwrap();
+		wallet.trust_ordinary_spends(&[coins[0].id()]).await.unwrap();
+		let mut latest = db.get_fallback_snapshot().await.unwrap();
+		assert!(!latest.awaiting_settlement.contains(&coins[0].id()));
+		wallet.apply_fallback_chain_states(&mut latest).await.unwrap();
+		assert_eq!(db.get_wallet_vtxo(coins[0].id()).await.unwrap().unwrap().state, VtxoState::Spent);
+	}
 
 	fn id(value: u8) -> VtxoId { VtxoId::from_slice(&[value; 36]).unwrap() }
 
-	#[test]
-	fn prepared_exit_balance_requires_its_exact_pending_nonbinding_safety_reservation() {
-		let movement_id = MovementId::new(7);
-		let mut coin = wallet_vtxo_from_full(&VTXO_VECTORS.board_vtxo,
-			VtxoState::Locked { holder: Some(movement_id.into()) }, true);
-		let exit = StoredExit { vtxo_id: coin.id(), movement_id: Some(movement_id),
-			state: ExitState::new_start(BlockHeight::new(1)), history: vec![] };
-		let mut movement = Movement::new(movement_id, MovementStatus::Pending,
-			&MovementSubsystem { name: Subsystem::EXIT.as_name().into(), kind: "exit".into() }, chrono::Local::now());
-		movement.metadata.insert("protective_exit".into(), serde_json::Value::Bool(true));
-		movement.input_vtxos.push(coin.id());
-		assert!(owns_protective_exit_reservation(&exit, &movement, &coin));
-		coin.state = VtxoState::Locked { holder: Some(MovementId::new(8).into()) };
-		assert!(!owns_protective_exit_reservation(&exit, &movement, &coin), "a foreign holder is not this exit's principal");
-		coin.state = VtxoState::Spendable;
-		assert!(!owns_protective_exit_reservation(&exit, &movement, &coin), "an unreserved manual intent does not add another balance");
-		coin.state = VtxoState::Locked { holder: Some(movement_id.into()) };
-		movement.metadata.insert("protective_round_state".into(), serde_json::json!(1));
-		assert!(!owns_protective_exit_reservation(&exit, &movement, &coin), "binding principal remains in the round bucket");
-		movement.metadata.remove("protective_round_state");
-		movement.metadata.remove("protective_exit");
-		assert!(!owns_protective_exit_reservation(&exit, &movement, &coin));
-		movement.metadata.insert("protective_exit".into(), serde_json::Value::Bool(true));
-		movement.status = MovementStatus::Canceled;
-		assert!(!owns_protective_exit_reservation(&exit, &movement, &coin));
-		movement.status = MovementStatus::Pending;
-		movement.input_vtxos.push(id(8));
-		assert!(!owns_protective_exit_reservation(&exit, &movement, &coin), "a mismatched operation cannot synthesize this amount");
+	fn owned_pending_cut(
+		owned: &HashMap<VtxoId, Amount>, pending: &BTreeSet<VtxoId>, paths: &[(VtxoId, Vec<VtxoId>)],
+	) -> anyhow::Result<HashMap<VtxoId, Amount>> {
+		let mut result = owned.iter().filter(|(id, _)| pending.contains(id)).map(|(id, value)| (*id, *value)).collect();
+		for (child, path) in paths { subtract_owned_descendant(owned, &mut result, *child, path)?; }
+		Ok(result)
 	}
+
 
 	#[test]
 	fn pending_signed_cut_does_not_double_subtract_shared_transitive_descendants() {

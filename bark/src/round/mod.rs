@@ -2,9 +2,7 @@
 //! Round State Machine
 //!
 
-mod protection;
-
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::iter;
 use std::borrow::Cow;
@@ -116,8 +114,6 @@ pub enum RoundStatus {
 	Unconfirmed {
 		funding_txid: Txid,
 	},
-	/// A self-refresh recovered on chain; retain its signed checkpoint for reorgs.
-	OnchainRecovery { claim_confirmed: bool },
 	/// Round didn't finish yet
 	Pending,
 	/// The round failed
@@ -134,7 +130,6 @@ impl RoundStatus {
 		match self {
 			Self::Confirmed { .. } => true,
 			Self::Unconfirmed { .. } => false,
-			Self::OnchainRecovery { .. } => false,
 			Self::Pending => false,
 			Self::Failed { .. } => true,
 			Self::Canceled => true,
@@ -146,7 +141,6 @@ impl RoundStatus {
 		match self {
 			Self::Confirmed { .. } => true,
 			Self::Unconfirmed { .. } => true,
-			Self::OnchainRecovery { claim_confirmed } => *claim_confirmed,
 			Self::Pending => false,
 			Self::Failed { .. } => false,
 			Self::Canceled => false,
@@ -198,9 +192,6 @@ pub struct RoundState {
 	/// Round is fully done
 	pub(crate) done: bool,
 
-	/// This emergency self-refresh is monitored against our own chain after recovery.
-	pub(crate) onchain_recovery: bool,
-
 	/// Our participation in this round
 	pub(crate) participation: RoundParticipation,
 
@@ -233,7 +224,7 @@ pub struct RoundState {
 impl StoredRoundState {
 	/// Cancel only a self-refresh that has not exposed forfeits. Store the
 	/// cancellation before releasing inputs, so a crash cannot resubmit it.
-	pub(crate) async fn cancel_for_protection(&mut self, wallet: &Wallet) -> anyhow::Result<bool> {
+	pub(crate) async fn cancel_for_fallback(&mut self, wallet: &Wallet) -> anyhow::Result<bool> {
 		let state = self.state();
 		if state.done || state.sent_forfeit_sigs || state.participation.outputs.is_empty()
 			|| !state.is_self_refresh(wallet).await? { return Ok(false); }
@@ -255,7 +246,7 @@ impl StoredRoundState {
 		wallet.inner.db.update_round_state(pending.round).await?;
 		pending.previous = None;
 		drop(pending);
-		persist_round_failure(wallet, &self.state().participation, self.state().movement_id).await?;
+		persist_round_failure(wallet, &self.state().participation, self.state().movement_id, true).await?;
 		Ok(true)
 	}
 
@@ -277,32 +268,20 @@ impl StoredRoundState {
 					&& saved.state().unlock_hash() == Some(unlock_hash)
 					&& saved.state().movement_id == self.state().movement_id,
 					"round cancellation conflicts with its durable checkpoint");
-				self.cancel_for_protection(wallet).await
+				self.cancel_for_fallback(wallet).await
 			},
 			Err(status) => Err(anyhow::Error::from(status).context("round cancellation status is not conclusive")),
 		}
-	}
-
-	pub(crate) async fn process_event_bounded(&mut self, wallet: &Wallet, event: &RoundEvent) -> anyhow::Result<bool> {
-		let budget = Duration::from_secs(wallet.config().daemon_sync_interval_secs.max(1));
-		bark_runtime::timeout(budget, self.state_mut().process_event(wallet, event)).await
-			.context("round event processing exceeded its interval; inputs remain protected")
 	}
 
 	/// Progress under the real round lock. The forfeit path persists its
 	/// irreversible checkpoint itself rather than relying on a successful RPC.
 	pub async fn sync(&mut self, wallet: &Wallet) -> anyhow::Result<RoundStatus> {
 		let checkpoint = self.checkpoint();
-		let budget = Duration::from_secs(wallet.config().daemon_sync_interval_secs.max(1));
-		let progress = async {
+		let result = async {
 			if self.cancel_if_server_cancelled(wallet).await? { return Ok(RoundStatus::Canceled); }
-			if let Some(status) = self.recover_binding_refresh(wallet).await? { return Ok(status); }
 			self.state_mut().sync(wallet, &checkpoint).await
-		};
-		let result = match bark_runtime::timeout(budget, progress).await {
-			Ok(result) => result,
-			Err(error) => Err(anyhow::Error::new(error).context("round sync exceeded its interval; durable state retained")),
-		};
+		}.await;
 		if result.is_err() {
 			if let Some(saved) = wallet.inner.db.get_round_state_by_id(self.id()).await? {
 				if saved.state().sent_forfeit_sigs || matches!(saved.state().flow, RoundFlowState::Canceled) {
@@ -338,7 +317,6 @@ impl RoundState {
 			new_vtxos: Vec::new(),
 			sent_forfeit_sigs: false,
 			done: false,
-			onchain_recovery: false,
 			fallback_refusal: None,
 		}
 	}
@@ -356,18 +334,12 @@ impl RoundState {
 			new_vtxos: Vec::new(),
 			sent_forfeit_sigs: false,
 			done: false,
-			onchain_recovery: false,
 			fallback_refusal: None,
 		}
 	}
 
 	/// A durable before-wire marker, including requests whose reply was lost.
 	pub fn forfeits_may_be_exposed(&self) -> bool { self.sent_forfeit_sigs }
-
-	/// Chain recovery remains monitored even after its current claim confirms.
-	pub fn onchain_recovery_status(&self) -> Option<RoundStatus> {
-		self.onchain_recovery.then_some(RoundStatus::OnchainRecovery { claim_confirmed: self.done })
-	}
 
 	/// Our participation in this round
 	pub fn participation(&self) -> &RoundParticipation {
@@ -464,7 +436,7 @@ impl RoundState {
 			RoundFlowState::Finished { .. } => false,
 		};
 		if ret {
-			persist_round_failure(wallet, &self.participation, self.movement_id).await
+			persist_round_failure(wallet, &self.participation, self.movement_id, false).await
 				.context("failed to persist round failure for cancelation")?;
 		}
 		Ok(ret)
@@ -630,7 +602,7 @@ impl RoundState {
 						{} input(s); dropping it", lost.len(),
 					);
 					self.flow = RoundFlowState::Canceled;
-					persist_round_failure(wallet, &self.participation, self.movement_id).await
+					persist_round_failure(wallet, &self.participation, self.movement_id, false).await
 						.context("failed to persist dropped delegated round failure")?;
 					return Ok(RoundStatus::Canceled);
 				},
@@ -864,7 +836,7 @@ impl RoundState {
 							info!("Pending round participation cannot be shrunk; canceling it");
 							self.flow = RoundFlowState::Canceled;
 							persist_round_failure(
-								wallet, &self.participation, self.movement_id,
+								wallet, &self.participation, self.movement_id, false,
 							).await.context("failed to persist round cancelation")?;
 							return Ok(RoundStatus::Canceled);
 						},
@@ -874,12 +846,13 @@ impl RoundState {
 				Ok(RoundStatus::Pending)
 			},
 			RoundFlowState::Failed { ref error } => {
-				persist_round_failure(wallet, &self.participation, self.movement_id).await
+				persist_round_failure(wallet, &self.participation, self.movement_id, false).await
 					.context("failed to persist round failure")?;
 				Ok(RoundStatus::Failed { error: error.clone() })
 			},
 			RoundFlowState::Canceled => {
-				persist_round_failure(wallet, &self.participation, self.movement_id).await
+				ensure!(!self.sent_forfeit_sigs, "cancelled round exposed forfeit signatures");
+				persist_round_failure(wallet, &self.participation, self.movement_id, true).await
 					.context("failed to persist round failure")?;
 				Ok(RoundStatus::Canceled)
 			},
@@ -981,7 +954,7 @@ impl RoundState {
 			RoundFlowState::Finished { ref funding_tx, unlock_hash } => {
 				let funding_txid = funding_tx.compute_txid();
 				let confirmed = check_funding_tx_confirmations(
-					wallet, funding_txid, &funding_tx,
+					wallet, funding_txid, &funding_tx, true,
 				).await.context("error checking funding tx confirmations")?;
 				if !confirmed {
 					trace!("Funding tx {} not yet deeply enough confirmed", funding_txid);
@@ -1036,9 +1009,6 @@ impl RoundState {
 	/// Candidate input VTXOs whose current lock must be checked against this
 	/// round's holder. A persisted cancellation can still await lock release.
 	pub fn locked_pending_inputs(&self) -> &[Vtxo<Full>] {
-		if self.onchain_recovery {
-			return if self.done { &[] } else { &self.new_vtxos };
-		}
 		//TODO(stevenroose) consider if we can't just drop the state after forfeit exchange
 		match self.flow {
 			// These are candidates, not a claim that the inputs are locked: a
@@ -1070,7 +1040,7 @@ impl RoundState {
 	///
 	/// This becomes zero once the new round VTXOs are unlocked.
 	pub fn pending_balance(&self) -> Amount {
-		if self.done || self.onchain_recovery {
+		if self.done {
 			return Amount::ZERO;
 		}
 
@@ -1340,6 +1310,18 @@ async fn hark_vtxo_swap(
 ) -> Result<(), HarkForfeitError> {
 	let (mut srv, _) = wallet.require_server().await.map_err(HarkForfeitError::Err)?;
 
+	if sent_forfeit_sigs {
+		let response = srv.client.round_participation_status(protos::RoundParticipationStatusRequest {
+			unlock_hash: unlock_hash.to_byte_array().to_vec(),
+		}).await.context("error checking released round material").map_err(HarkForfeitError::Err)?
+			.into_inner();
+		if response.status == protos::RoundParticipationStatus::RoundPartReleased as i32 {
+			complete_released_outputs(wallet, &mut srv, participation, output_vtxos,
+				funding_tx, unlock_hash, &response).await.map_err(HarkForfeitError::Err)?;
+			return Ok(());
+		}
+	}
+
 	// before we start make sure the server has our input vtxo signatures
 	wallet.register_vtxo_transactions_with_server(&participation.inputs).await
 		.context("couldn't send our input vtxo transactions to server")
@@ -1446,6 +1428,52 @@ async fn hark_vtxo_swap(
 	Ok(())
 }
 
+/// Recover signatures from an exchange whose forfeits were already accepted.
+/// This only fills witness material; normal completion decides local states.
+async fn complete_released_outputs(
+	wallet: &Wallet,
+	srv: &mut ServerConnection,
+	participation: &RoundParticipation,
+	outputs: &mut [Vtxo<Full>],
+	funding_tx: &Transaction,
+	unlock_hash: UnlockHash,
+	response: &protos::RoundParticipationStatusResponse,
+) -> anyhow::Result<()> {
+	ensure!(response.status == protos::RoundParticipationStatus::RoundPartReleased as i32,
+		"round participation has not released its preimage");
+	let preimage: [u8; 32] = response.unlock_preimage.as_deref()
+		.context("released round has no preimage")?.try_into().context("invalid released preimage length")?;
+	ensure!(UnlockHash::hash(&preimage) == unlock_hash, "released round preimage has another hash");
+	let input_ids = response.input_vtxo_ids.iter().map(|raw| VtxoId::from_bytes(raw))
+		.collect::<Result<BTreeSet<_>, _>>()?;
+	ensure!(!input_ids.is_empty() && input_ids.len() == response.input_vtxo_ids.len()
+		&& input_ids == participation.inputs.iter().map(|coin| coin.id()).collect(),
+		"released round has different inputs");
+	let server_outputs = response.output_vtxos.iter().map(|raw| Vtxo::<Full>::deserialize(raw))
+		.collect::<Result<Vec<_>, _>>()?;
+	ensure!(!outputs.is_empty() && outputs.len() == server_outputs.len(),
+		"released round has different outputs");
+	for (output, server_output) in outputs.iter().zip(&server_outputs) {
+		ensure!(output.to_bare().serialize() == server_output.to_bare().serialize()
+			&& output.unlock_hash() == Some(unlock_hash), "released round output changed");
+		check_vtxo_fails_hash_lock(funding_tx, output)?;
+	}
+	let actual = wallet.chain().get_tx(&funding_tx.compute_txid()).await?
+		.context("released round funding is unavailable")?;
+	let reported = deserialize::<Transaction>(response.round_funding_tx.as_deref()
+		.context("released round has no funding transaction")?)?;
+	ensure!(actual == *funding_tx && reported == actual, "released round funding differs from the chain");
+	for output in outputs.iter_mut() {
+		let bare = output.to_bare().serialize();
+		hark_cosign_leaf(wallet, srv, &actual, output).await?;
+		ensure!(output.provide_unlock_preimage(preimage), "released round preimage does not unlock output");
+		ensure!(output.to_bare().serialize() == bare && output.has_all_witnesses(),
+			"released round completion changed its output");
+		output.validate(&actual)?;
+	}
+	Ok(())
+}
+
 fn check_vtxo_fails_hash_lock(funding_tx: &Transaction, vtxo: &Vtxo<Full>) -> anyhow::Result<()> {
 	// validate() below short-circuits at the terminal hash-locked transition
 	// before the point-vs-genesis checksum runs; call validate_unsigned first
@@ -1514,6 +1542,7 @@ fn check_round_matches_participation(
 	scheduled_height: Option<BlockHeight>,
 	tip: BlockHeight,
 	exit_margin: BlockDelta,
+	already_released: bool,
 ) -> anyhow::Result<()> {
 	ensure!(new_vtxos.len() == part.outputs.len(),
 		"unexpected number of VTXOs: got {}, expected {}", new_vtxos.len(), part.outputs.len(),
@@ -1531,7 +1560,7 @@ fn check_round_matches_participation(
 	// We have two requirements on the outputs:
 	// - if we asked for a scheduled height, we want the server to respect it
 	// - if our inputs are not expired yet, we want the output VTXOs to be exitable
-	let expired_inputs = part.inputs.iter().all(|v| v.expiry_height() <= tip);
+	let expired_inputs = already_released || part.inputs.iter().all(|v| v.expiry_height() <= tip);
 	let max_input_exit_delta = part.inputs.iter().map(|v| v.exit_delta()).max()
 		.expect("min one input");
 	let min_exitable = min_exitable_output_vtxo_expiry_height(tip, exit_margin, max_input_exit_delta);
@@ -1578,6 +1607,7 @@ async fn check_funding_tx_confirmations(
 	wallet: &Wallet,
 	funding_txid: Txid,
 	funding_tx: &Transaction,
+	broadcast_missing: bool,
 ) -> anyhow::Result<bool> {
 	let tip = wallet.inner.chain.tip().await.context("chain source error")?;
 	let conf_height = tip.saturating_sub(wallet.inner.config.round_tx_required_confirmations) + BlockDelta::new(1);
@@ -1596,6 +1626,7 @@ async fn check_funding_tx_confirmations(
 				Ok(false)
 			}
 		},
+		TxStatus::NotFound if !broadcast_missing => Ok(false),
 		TxStatus::NotFound => {
 			// let's try to submit it to our mempool
 			//TODO(stevenroose) change this to an explicit "testmempoolaccept" so that we can
@@ -1658,16 +1689,7 @@ async fn progress_delegated(
 		return Ok(HarkProgressResult::RoundPending);
 	}
 
-	// Since we got here, we clearly don't think we're finished.
-	// So even if the server thinks we did the dance before, we need the
-	// cosignature on the leaf tx so we need to do the dance again.
-	// "Guilty feet have got no rhythm."
-	if status == protos::RoundParticipationStatus::RoundPartReleased {
-		let preimage = resp.unlock_preimage.as_ref().map(|p| p.as_hex());
-		warn!("Server says preimage was already released for hArk participation \
-			with unlock hash {}. Supposed preimage: {:?}", unlock_hash, preimage,
-		);
-	}
+	let already_released = status == protos::RoundParticipationStatus::RoundPartReleased;
 
 	let funding_tx_bytes = resp.round_funding_tx
 		.context("funding txid should be provided when status is not pending")
@@ -1681,7 +1703,7 @@ async fn progress_delegated(
 	);
 
 	// Check the confirmation status of the funding tx
-	let confirmed = check_funding_tx_confirmations(wallet, funding_txid, &funding_tx).await
+	let confirmed = check_funding_tx_confirmations(wallet, funding_txid, &funding_tx, !already_released).await
 		.context("checking funding tx confirmations")
 		.map_err(HarkForfeitError::Err)?;
 
@@ -1720,7 +1742,7 @@ async fn progress_delegated(
 		.map_err(HarkForfeitError::Err)?;
 	check_round_matches_participation(
 		participation, &new_vtxos, &funding_tx, &ark_info, scheduled_height,
-		tip, wallet.inner.config.vtxo_exit_margin,
+		tip, wallet.inner.config.vtxo_exit_margin, already_released,
 	)
 		.context("new VTXOs received from server don't match our participation")
 		.map_err(HarkForfeitError::Err)?;
@@ -1729,7 +1751,7 @@ async fn progress_delegated(
 	// SentForfeits would set the round's forfeit flag, which disables the
 	// exitability check above on the next attempt.
 	hark_vtxo_swap(
-		wallet, participation, &mut new_vtxos, &funding_tx, unlock_hash, sent_forfeit_sigs,
+		wallet, participation, &mut new_vtxos, &funding_tx, unlock_hash, sent_forfeit_sigs || already_released,
 		checkpoint,
 	).await.map_err(|e| match e {
 		HarkForfeitError::Err(e) =>
@@ -1984,8 +2006,16 @@ async fn persist_round_success(
 	let input_ids = participation.inputs.iter().map(|v| v.id()).collect::<Vec<_>>();
 	let spent_result = wallet.inner.db.steal_lock_to_spent(&input_ids).await
 		.context("failed to mark input VTXOs as spent");
-	let store_result = wallet.store_spendable_vtxos(new_vtxos).await
-		.context("failed to store new VTXOs");
+	let store_result = async {
+		// An earlier unanswered recovery can have stored this same output without
+		// its witnesses. Complete its validated material before releasing None.
+		for output in new_vtxos {
+			wallet.validate_vtxo(output).await?;
+			wallet.inner.db.update_vtxo_witnesses(output).await?;
+		}
+		wallet.store_spendable_vtxos(new_vtxos).await?;
+		wallet.unlock_vtxos(new_vtxos, None).await
+	}.await.context("failed to store new VTXOs");
 	let update_result = if let Some(mid) = movement_id {
 		wallet.inner.movements.finish_movement_with_update(
 			mid,
@@ -2009,6 +2039,7 @@ async fn persist_round_failure(
 	wallet: &Wallet,
 	participation: &RoundParticipation,
 	movement_id: Option<MovementId>,
+	cancelled_before_forfeit: bool,
 ) -> anyhow::Result<()> {
 	debug!("Attempting to persist the failure of a round with the movement ID {:?}", movement_id);
 	// Inputs the round never locked, or that another operation holds by now,
@@ -2016,11 +2047,21 @@ async fn persist_round_failure(
 	let unlock_result = wallet.unlock_vtxos(
 		&participation.inputs, movement_id.map(|m| m.into()),
 	).await;
-	let finish_result = if let Some(movement_id) = movement_id {
-		wallet.inner.movements.finish_movement(movement_id, MovementStatus::Failed).await
-	} else {
+	let finish_result: anyhow::Result<()> = async {
+		if let Some(movement_id) = movement_id {
+			let clear_cost = if cancelled_before_forfeit {
+				let previous = wallet.inner.db.get_movement_by_id(movement_id).await?;
+				previous.effective_balance != SignedAmount::ZERO || previous.offchain_fee != Amount::ZERO
+			} else { false };
+			if clear_cost {
+				wallet.inner.movements.finish_movement_with_update(movement_id, MovementStatus::Failed,
+					MovementUpdate::new().effective_balance(SignedAmount::ZERO).fee(Amount::ZERO)).await?;
+			} else {
+				wallet.inner.movements.finish_movement(movement_id, MovementStatus::Failed).await?;
+			}
+		}
 		Ok(())
-	};
+	}.await;
 	if let Err(e) = &finish_result {
 		error!("Failed to mark movement as failed: {:#}", e);
 	}
@@ -2112,7 +2153,7 @@ impl Wallet {
 	///
 	/// Returns `None` when the state is gone or another holder has it, which
 	/// a caller making opportunistic progress skips.
-	pub(crate) async fn try_lock_round_state(
+	async fn try_lock_round_state(
 		&self,
 		id: RoundStateId,
 	) -> anyhow::Result<Option<StoredRoundState>> {
@@ -2350,6 +2391,112 @@ impl Wallet {
 		// from a state that is itself being synced.
 		let id = self.inner.db.store_round_state(&state).await?;
 		Ok(StoredRoundState::new(id, state))
+	}
+
+	/// Complete the existing, already released exchange without replaying forfeits
+	/// or registering transactions. The caller still checks its current status.
+	pub(crate) async fn recover_released_round_output(&self, candidate: &Vtxo<Full>) -> anyhow::Result<Vtxo<Full>> {
+		let unlock_hash = candidate.unlock_hash().context("recovery source is not a hashlocked round output")?;
+		for saved in self.pending_round_states().await? {
+			if saved.state().unlock_hash() != Some(unlock_hash) { continue; }
+			let mut state = self.lock_wait_round_state(saved.id()).await?
+				.context("round recovery state disappeared")?;
+			ensure!(matches!(state.sync(self).await?, RoundStatus::Confirmed { .. }),
+				"released round is not ready to complete");
+			self.inner.db.remove_round_state(&state).await?;
+			let output = self.get_full_vtxo(candidate.id()).await?;
+			ensure!(output.to_bare().serialize() == candidate.to_bare().serialize(), "recovered round output changed");
+			self.validate_vtxo(&output).await?;
+			return Ok(output);
+		}
+
+		let (mut srv, ark_info) = self.require_server().await?;
+		let response = srv.client.round_participation_status(protos::RoundParticipationStatusRequest {
+			unlock_hash: unlock_hash.to_byte_array().to_vec(),
+		}).await.context("error fetching released round")?.into_inner();
+		ensure!(response.status == protos::RoundParticipationStatus::RoundPartReleased as i32,
+			"round has not released its outputs");
+		let preimage: [u8; 32] = response.unlock_preimage.as_deref()
+			.context("released round has no preimage")?.try_into().context("invalid released preimage length")?;
+		ensure!(UnlockHash::hash(&preimage) == unlock_hash, "released round preimage has another hash");
+		let input_ids = response.input_vtxo_ids.iter().map(|raw| VtxoId::from_bytes(raw))
+			.collect::<Result<BTreeSet<_>, _>>()?;
+		ensure!(!input_ids.is_empty() && input_ids.len() == response.input_vtxo_ids.len()
+			&& !input_ids.contains(&candidate.id()), "released round has empty, duplicate or overlapping inputs");
+		let funding_tx = deserialize::<Transaction>(response.round_funding_tx.as_deref()
+			.context("released round has no funding transaction")?)?;
+		ensure!(check_funding_tx_confirmations(self, funding_tx.compute_txid(), &funding_tx, false).await?,
+			"released round funding lacks confirmations");
+		let mut outputs = response.output_vtxos.iter().map(|raw| Vtxo::<Full>::deserialize(raw))
+			.collect::<Result<Vec<_>, _>>()?;
+		ensure!(outputs.iter().filter(|output| output.id() == candidate.id()).count() == 1,
+			"released round does not contain the requested output exactly once");
+		let expected = outputs.iter().find(|output| output.id() == candidate.id()).expect("checked above");
+		ensure!(expected.to_bare().serialize() == candidate.to_bare().serialize(), "released round output changed");
+		if candidate.has_all_witnesses() {
+			// A complete received output can have foreign participants or siblings.
+			// It needs no leaf cosigning, but the same old-input retirement applies.
+			let actual = self.chain().get_tx(&candidate.chain_anchor().txid).await?
+				.context("released round funding is unavailable")?;
+			ensure!(actual == funding_tx, "released round funding differs from the chain");
+			candidate.validate(&actual)?;
+			outputs = vec![candidate.clone()];
+		} else {
+			let output_pubkeys = outputs.iter().map(|output| output.user_pubkey()).collect::<Vec<_>>();
+			self.find_vtxo_keypairs(output_pubkeys, self.inner.config.vtxo_key_gap_limit).await?;
+			for output in &outputs {
+				ensure!(self.pubkey_keypair(&output.user_pubkey()).await?.is_some(),
+					"released round output {} is not ours", output.id());
+			}
+			let mut inputs = Vec::with_capacity(input_ids.len());
+			for id in &input_ids {
+				let input = self.fetch_vtxo(*id).await?;
+				ensure!(self.pubkey_keypair(&input.user_pubkey()).await?.is_some()
+					&& input.server_pubkey() == ark_info.server_pubkey, "released round input is not ours");
+				self.validate_vtxo(&input).await?;
+				inputs.push(input);
+			}
+			let participation = RoundParticipation {
+				inputs,
+				outputs: outputs.iter().map(|output| VtxoRequest { amount: output.amount(), policy: output.policy().clone() }).collect(),
+				owner_proofs: BTreeMap::new(),
+				unblinded_mailbox_id: Some(self.mailbox_identifier()),
+			};
+			let total = participation.total_in().context("released input value overflow")?;
+			let fee = total.checked_sub(participation.total_out().context("released output value overflow")?)
+				.context("released outputs exceed inputs")?;
+			ensure!(fee.checked_mul(100).context("released fee overflow")?
+				<= total.checked_mul(MAX_RECOVERED_PARTICIPATION_FEE_PERCENT).context("released value overflow")?,
+				"released round exceeds the recovered participation fee limit");
+			check_round_matches_participation(&participation, &outputs, &funding_tx, &ark_info,
+				None, self.chain().tip().await?, self.inner.config.vtxo_exit_margin, true)?;
+			complete_released_outputs(self, &mut srv, &participation, &mut outputs, &funding_tx,
+				unlock_hash, &response).await?;
+		}
+		// The replacement is funded by a different tree, so an old wallet backup
+		// must retire its already-owned originals before admitting this output.
+		{
+			let _guard = self.lock_fallback_history(Duration::from_secs(30)).await?;
+			let claimed = self.operation_input_ids().await?;
+			let mut snapshot = self.inner.db.get_fallback_snapshot().await?;
+			let mut existing = Vec::new();
+			for id in &input_ids {
+				let Some(stored) = self.inner.db.get_wallet_vtxo(*id).await? else { continue; };
+				ensure!(!claimed.contains(id) && !snapshot.adopted_payout_vtxos.contains(id),
+					"released input still belongs to another local operation or payout");
+				if stored.state == (VtxoState::Locked { holder: None }) {
+					ensure!(self.inner.db.retire_vtxo_lock(*id, None).await?,
+						"released input acquired another holder");
+				}
+				snapshot.awaiting_settlement.remove(id);
+				existing.push(*id);
+			}
+			self.inner.db.store_fallback_snapshot(&snapshot).await?;
+			self.inner.db.update_vtxo_states_checked(&existing, VtxoState::Spent,
+				&[VtxoStateKind::Spendable, VtxoStateKind::Spent]).await?;
+		}
+		for output in &outputs { self.inner.db.update_vtxo_witnesses(output).await?; }
+		Ok(outputs.into_iter().find(|output| output.id() == candidate.id()).expect("checked above"))
 	}
 
 	/// Rebuild a delegated round participation the wallet has no local state
@@ -2686,7 +2833,7 @@ impl Wallet {
 							warn!("Error updating pending round state in db: {:#}", e);
 						}
 					},
-					RoundStatus::Pending | RoundStatus::OnchainRecovery { .. } => {
+					RoundStatus::Pending => {
 						if let Err(e) = self.inner.db.update_round_state(&state).await {
 							warn!("Error updating pending round state in db: {:#}", e);
 						}
@@ -2724,10 +2871,7 @@ impl Wallet {
 		event: Option<&RoundEvent>,
 	) {
 		if let Some(event) = event && state.state().ongoing_participation() {
-			let updated = match state.process_event_bounded(self, event).await {
-				Ok(updated) => updated,
-				Err(error) => { warn!("Bounded round event awaits retry: {:#}", error); return; },
-			};
+			let updated = state.state_mut().process_event(self, &event).await;
 			if updated {
 				if let Err(e) = self.inner.db.update_round_state(&state).await {
 					error!("Error storing round state #{} after progress: {:#}", state.id(), e);
@@ -2833,12 +2977,9 @@ impl Wallet {
 				return Ok(());
 			}
 
-			let event = match bark_runtime::timeout(
-				Duration::from_secs(self.config().daemon_sync_interval_secs.max(1)), events.next(),
-			).await {
-				Ok(event) => event.context("events stream broke")?.context("error on event stream")?,
-				Err(_) => continue, // Recheck the chain deadline even with a silent server.
-			};
+			let event = events.next().await
+				.context("events stream broke")?
+				.context("error on event stream")?;
 
 			let futs = state_ids.into_iter().map(async |state| {
 				let locked = self.lock_wait_round_state(state).await?;
@@ -2935,8 +3076,6 @@ impl Wallet {
 	where
 		S: Stream<Item = anyhow::Result<RoundEvent>> + Unpin,
 	{
-		let id = state.id();
-		let movement_id = state.state().movement_id;
 		loop {
 			if !state.state().ongoing_participation() {
 				let status = state.sync(self).await?;
@@ -2955,37 +3094,10 @@ impl Wallet {
 				}
 			}
 
-			// Waiting for a server event must not monopolize the named round
-			// lock. Protection can cancel a pre-forfeit self-refresh while
-			// this stream is silent; every event re-reads the durable state.
-			drop(state);
-			let event = bark_runtime::timeout(
-				Duration::from_secs(self.config().daemon_sync_interval_secs.max(1)), events.next(),
-			).await;
-			state = match self.lock_wait_round_state(id).await? {
-				Some(state) => state,
-				None => {
-					// Another wallet task may have completed and removed it
-					// while the stream was idle. Read its durable result.
-					if let Some(movement_id) = movement_id {
-						let movement = self.inner.db.get_movement_by_id(movement_id).await?;
-						if movement.status == MovementStatus::Successful {
-							let txid = serde_json::from_value::<Txid>(movement.metadata.get("funding_txid")
-								.context("completed round has no funding transaction")?.clone())?;
-							let funding = self.chain().get_tx(&txid).await?.context("completed round funding is unavailable")?;
-							ensure!(check_funding_tx_confirmations(self, txid, &funding).await?, "completed round funding was reorged");
-							return Ok(RoundStatus::Confirmed { funding_txid: txid });
-						}
-					}
-					bail!("round state finished in another wallet task; durable movement retained");
-				},
-			};
-			if !state.state().ongoing_participation() { continue; }
-			let event = match event {
-				Ok(event) => event.context("events stream broke")?.context("error on event stream")?,
-				Err(_) => continue,
-			};
-			if state.process_event_bounded(self, &event).await? {
+			let event = events.next().await
+				.context("events stream broke")?
+				.context("error on event stream")?;
+			if state.state_mut().process_event(self, &event).await {
 				self.inner.db.update_round_state(&state).await?;
 			}
 		}

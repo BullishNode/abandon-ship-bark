@@ -583,7 +583,6 @@ ALTER SEQUENCE public.ephemeral_tweak_id_seq OWNED BY public.ephemeral_tweak.id;
 CREATE TABLE public.expiry_allocation (
     id bigint NOT NULL,
     expiry_height integer NOT NULL,
-    generation bigint NOT NULL,
     status text NOT NULL,
     sweep_txid text,
     sweep_tx bytea,
@@ -594,7 +593,6 @@ CREATE TABLE public.expiry_allocation (
     CONSTRAINT expiry_allocation_check CHECK (((sweep_txid IS NULL) = (sweep_tx IS NULL))),
     CONSTRAINT expiry_allocation_check1 CHECK (((confirmed_height IS NULL) = (confirmed_hash IS NULL))),
     CONSTRAINT expiry_allocation_expiry_height_check CHECK ((expiry_height >= 0)),
-    CONSTRAINT expiry_allocation_generation_check CHECK ((generation >= 0)),
     CONSTRAINT expiry_allocation_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'conflicted'::text])))
 );
 
@@ -687,7 +685,6 @@ CREATE TABLE public.expiry_chain_view (
     id smallint NOT NULL,
     generation bigint DEFAULT 0 NOT NULL,
     invalid boolean DEFAULT true NOT NULL,
-    invalid_from bigint DEFAULT 0 NOT NULL,
     rebuilt_captaind_height bigint,
     rebuilt_captaind_hash text,
     rebuilt_watchmand_height bigint,
@@ -764,9 +761,7 @@ CREATE TABLE public.expiry_owner_key (
 CREATE TABLE public.expiry_split_request (
     vtxo_id text NOT NULL,
     progress_txid text NOT NULL,
-    generation bigint NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT expiry_split_request_generation_check CHECK ((generation >= 0))
+    created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -801,31 +796,11 @@ CREATE TABLE public.expiry_terminal_claim (
 --
 
 CREATE TABLE public.fallback_record (
-    id bigint NOT NULL,
     mailbox_pk text NOT NULL,
     spk text NOT NULL,
     mailbox_sig text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-
-
---
--- Name: fallback_record_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.fallback_record_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: fallback_record_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.fallback_record_id_seq OWNED BY public.fallback_record.id;
 
 
 --
@@ -2218,13 +2193,6 @@ ALTER TABLE ONLY public.expiry_entitlement ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
--- Name: fallback_record id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.fallback_record ALTER COLUMN id SET DEFAULT nextval('public.fallback_record_id_seq'::regclass);
-
-
---
 -- Name: htlc_settlement id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2520,19 +2488,11 @@ ALTER TABLE ONLY public.expiry_terminal_claim
 
 
 --
--- Name: fallback_record fallback_record_mailbox_pk_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.fallback_record
-    ADD CONSTRAINT fallback_record_mailbox_pk_key UNIQUE (mailbox_pk);
-
-
---
 -- Name: fallback_record fallback_record_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.fallback_record
-    ADD CONSTRAINT fallback_record_pkey PRIMARY KEY (id);
+    ADD CONSTRAINT fallback_record_pkey PRIMARY KEY (mailbox_pk);
 
 
 --

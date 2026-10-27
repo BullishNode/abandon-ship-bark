@@ -271,7 +271,6 @@ Class | Method | HTTP request | Description
  - [RoundStatusOneOf3](docs/RoundStatusOneOf3.md)
  - [RoundStatusOneOf4](docs/RoundStatusOneOf4.md)
  - [RoundStatusOneOf5](docs/RoundStatusOneOf5.md)
- - [RoundStatusOneOf6](docs/RoundStatusOneOf6.md)
  - [Send](docs/Send.md)
  - [SendOnchainFeeEstimateQuery](docs/SendOnchainFeeEstimateQuery.md)
  - [SendOnchainRequest](docs/SendOnchainRequest.md)

@@ -550,7 +550,6 @@ async fn queued_send_does_not_inherit_completed_payment() {
 				config.vtxo_exit_delta = BlockDelta::new(144);
 				config.htlc_send_expiry_delta = BlockDelta::new(286);
 				config.htlc_expiry_delta = BlockDelta::new(40);
-				config.max_htlc_expiry_delta = BlockDelta::new(288);
 				config.invoice_check_interval = Duration::from_secs(1);
 				config.fees.lightning_send.base_fee = sat(1_000);
 				config.ln_max_fee_ppm = 1_000_000;

@@ -253,9 +253,9 @@ impl rpc::server::MailboxService for crate::Server {
 		// Start listening for updates on the tip of the mailbox.
 		// Marking the first value as changed makes `changed()` return
 		// immediately so the loop starts with a catch-up fetch.
-		let mut mailbox_tip_rx = self.db.read(async |tx|
-			self.mailbox_manager.subscribe(tx, network, mailbox_id, 0).await
-		).await.to_status()?;
+		self.db.read(async |tx| tx.require_registered_mailbox(mailbox_id, network).await)
+			.await.to_status()?;
+		let mut mailbox_tip_rx = self.mailbox_manager.subscribe(mailbox_id, 0);
 		mailbox_tip_rx.mark_changed();
 
 		let stream = async_stream::try_stream! {

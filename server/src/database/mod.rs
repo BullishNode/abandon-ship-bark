@@ -9,7 +9,6 @@ mod embedded {
 }
 
 pub mod fallback;
-pub(crate) mod ordinary_spend;
 pub mod expiry_attribution;
 pub(crate) mod expiry_guard;
 pub mod expiry_inventory;

@@ -1044,10 +1044,42 @@ struct RefreshTransport {
 	nonce_requests: Arc<AtomicUsize>,
 	lose_forfeit_reply: Arc<AtomicBool>,
 	accepted_forfeits: Arc<AtomicUsize>,
+	registrations: Arc<AtomicUsize>,
+	leaf_cosigns: Arc<AtomicUsize>,
+	invalid_released_preimage: Arc<AtomicBool>,
+	reject_status_batches: Arc<AtomicBool>,
+	force_spent_history: Arc<AtomicBool>,
 }
 
 #[async_trait::async_trait]
 impl captaind::proxy::ArkRpcProxy for RefreshTransport {
+	async fn get_vtxos_status_by_ids(&self, upstream: &mut ArkClient, request: protos::GetVtxosStatusByIdsRequest)
+		-> Result<protos::GetVtxosStatusByIdsResponse, tonic::Status>
+	{
+		if self.reject_status_batches.load(Ordering::SeqCst) {
+			return Err(tonic::Status::unavailable("output status transport unavailable"));
+		}
+		let mut response = upstream.get_vtxos_status_by_ids(request).await?.into_inner();
+		if self.force_spent_history.load(Ordering::SeqCst) {
+			for coin in &mut response.vtxos { coin.spend_state = protos::VtxoSpendState::Spent as i32; }
+		}
+		Ok(response)
+	}
+
+	async fn register_vtxo_transactions(&self, upstream: &mut ArkClient, request: protos::RegisterVtxoTransactionsRequest)
+		-> Result<protos::Empty, tonic::Status>
+	{
+		self.registrations.fetch_add(1, Ordering::SeqCst);
+		Ok(upstream.register_vtxo_transactions(request).await?.into_inner())
+	}
+
+	async fn request_leaf_vtxo_cosign(&self, upstream: &mut ArkClient, request: protos::LeafVtxoCosignRequest)
+		-> Result<protos::LeafVtxoCosignResponse, tonic::Status>
+	{
+		self.leaf_cosigns.fetch_add(1, Ordering::SeqCst);
+		Ok(upstream.request_leaf_vtxo_cosign(request).await?.into_inner())
+	}
+
 	async fn request_forfeit_nonces(&self, upstream: &mut ArkClient, request: protos::ForfeitNoncesRequest)
 		-> Result<protos::ForfeitNoncesResponse, tonic::Status>
 	{
@@ -1075,7 +1107,14 @@ impl captaind::proxy::ArkRpcProxy for RefreshTransport {
 		let hash = UnlockHash::from_slice(&request.unlock_hash).unwrap();
 		let result = upstream.round_participation_status(request).await;
 		let fault = *self.status_fault.lock().unwrap();
-		if matches!(fault, CancellationStatusFault::Pass) { return result.map(|response| response.into_inner()); }
+		if matches!(fault, CancellationStatusFault::Pass) {
+			let mut response = result?.into_inner();
+			if response.status == protos::RoundParticipationStatus::RoundPartReleased as i32
+				&& self.invalid_released_preimage.load(Ordering::SeqCst) {
+				response.unlock_preimage.as_mut().unwrap()[0] ^= 1;
+			}
+			return Ok(response);
+		}
 		if matches!(fault, CancellationStatusFault::IssuedThenUnknown) {
 			let response = result?.into_inner();
 			assert_eq!(response.status, protos::RoundParticipationStatus::RoundPartIssued as i32);
@@ -1121,6 +1160,8 @@ struct RoundWriteFault {
 	hits: Arc<AtomicUsize>,
 	unlock_armed: Arc<AtomicBool>,
 	unlock_hits: Arc<AtomicUsize>,
+	snapshot_armed: Arc<AtomicBool>,
+	snapshot_hits: Arc<AtomicUsize>,
 }
 
 struct RoundWriteGate {
@@ -1134,6 +1175,10 @@ impl StorageAdaptor for RoundWriteGate {
 		if record.partition == partition::ROUND_STATE && self.fault.armed.load(Ordering::SeqCst) {
 			self.fault.hits.fetch_add(1, Ordering::SeqCst);
 			return Err(std::io::Error::other("round checkpoint write unavailable").into());
+		}
+		if record.partition == partition::FALLBACK_SNAPSHOT && self.fault.snapshot_armed.load(Ordering::SeqCst) {
+			self.fault.snapshot_hits.fetch_add(1, Ordering::SeqCst);
+			return Err(std::io::Error::other("fallback snapshot write unavailable").into());
 		}
 		if record.partition == partition::VTXO && self.fault.unlock_armed.load(Ordering::SeqCst) {
 			self.fault.unlock_hits.fetch_add(1, Ordering::SeqCst);
@@ -1154,6 +1199,7 @@ struct IssuedRefresh {
 	proxy: captaind::proxy::ArkRpcProxyServer,
 	database: Arc<RefreshDatabase>,
 	storage_path: PathBuf,
+	pre_round_backup: PathBuf,
 	mnemonic: bip39::Mnemonic,
 	source: Vtxo<Full>,
 	state_id: RoundStateId,
@@ -1203,6 +1249,8 @@ async fn issued_refresh(
 	source.validate(&funding).unwrap();
 	assert_eq!(source.amount(), sat(100_000));
 	let first_height = ctx.bitcoind().get_block_count().await;
+	let pre_round_backup = ctx.datadir.join("refresh-before-round.json");
+	tokio::fs::copy(&storage_path, &pre_round_backup).await.unwrap();
 	let round = if interactive {
 		let participation = wallet.build_refresh_participation([source.id()]).await.unwrap().unwrap();
 		wallet.join_next_round(participation, Some(RoundMovement::Refresh)).await.unwrap().unlock()
@@ -1254,7 +1302,7 @@ async fn issued_refresh(
 	drop(locked);
 	assert!(transport.nonce_requests.load(Ordering::SeqCst) > 0);
 	assert_eq!(transport.accepted_forfeits.load(Ordering::SeqCst), 0);
-	let fixture = IssuedRefresh { wallet, proxy, database, storage_path, mnemonic, source, state_id, movement, unlock_hash, sweep_at, first_height };
+	let fixture = IssuedRefresh { wallet, proxy, database, storage_path, pre_round_backup, mnemonic, source, state_id, movement, unlock_hash, sweep_at, first_height };
 	assert_refresh_held(&fixture.wallet, &fixture.database, fixture.state_id, fixture.movement, fixture.source.id(),
 		if interactive { RoundFlowKind::AwaitingConfirmations } else { RoundFlowKind::DelegatedPending }).await;
 	fixture
@@ -1347,6 +1395,8 @@ async fn cancelled_issued_refresh_reopens_and_receives_one_fallback_payout() {
 		assert_refresh_balance(&wallet, Amount::ZERO, sat(100_000), Amount::ZERO, Amount::ZERO).await;
 		let failed = database.get_movement_by_id(movement).await.unwrap();
 		assert_eq!(failed.status, MovementStatus::Failed);
+		assert_eq!(failed.effective_balance, bitcoin::SignedAmount::ZERO);
+		assert_eq!(failed.offchain_fee, Amount::ZERO);
 		assert!(failed.output_vtxos.is_empty());
 		let history = wallet.history().await.unwrap();
 		for _ in 0..2 { assert!(wallet.sync_pending_rounds().await.unwrap().is_empty()); }
@@ -1466,6 +1516,8 @@ async fn cancelled_issued_refresh_reopens_and_receives_one_fallback_payout() {
 		assert!(wallet.spendable_vtxos().await.unwrap().is_empty());
 		assert_refresh_balance(&wallet, Amount::ZERO, Amount::ZERO, Amount::ZERO, Amount::ZERO).await;
 		assert_eq!(database.get_movement_by_id(movement).await.unwrap().status, MovementStatus::Failed);
+		assert_eq!(database.get_movement_by_id(movement).await.unwrap().effective_balance, bitcoin::SignedAmount::ZERO);
+		assert_eq!(database.get_movement_by_id(movement).await.unwrap().offchain_fee, Amount::ZERO);
 		let current_history = wallet.history().await.unwrap();
 		assert_eq!(current_history, history, "chain discovery preserves the original native action history");
 		let refreshes = current_history.iter().filter(|entry| entry.subsystem.name == "bark.round").collect::<Vec<_>>();
@@ -1529,6 +1581,8 @@ async fn issued_refresh_keeps_its_holder_without_exact_cancellation_metadata() {
 		assert_eq!(fixture.wallet.get_vtxo_by_id(fixture.source.id()).await.unwrap().state, VtxoState::Spendable);
 		assert_refresh_balance(&fixture.wallet, Amount::ZERO, sat(100_000), Amount::ZERO, Amount::ZERO).await;
 		assert_eq!(fixture.database.get_movement_by_id(fixture.movement).await.unwrap().status, MovementStatus::Failed);
+		assert_eq!(fixture.database.get_movement_by_id(fixture.movement).await.unwrap().effective_balance, bitcoin::SignedAmount::ZERO);
+		assert_eq!(fixture.database.get_movement_by_id(fixture.movement).await.unwrap().offchain_fee, Amount::ZERO);
 		assert_eq!(transport.accepted_forfeits.load(Ordering::SeqCst), 0);
 	})).await.expect("invalid cancellation replies must leave the principal protected");
 }
@@ -1584,6 +1638,8 @@ async fn cancelled_refresh_checkpoint_failure_survives_reopen_before_unlock() {
 		assert_eq!(wallet.get_vtxo_by_id(source.id()).await.unwrap().state, VtxoState::Spendable);
 		assert_refresh_balance(&wallet, Amount::ZERO, sat(100_000), Amount::ZERO, Amount::ZERO).await;
 		assert_eq!(database.get_movement_by_id(movement).await.unwrap().status, MovementStatus::Failed);
+		assert_eq!(database.get_movement_by_id(movement).await.unwrap().effective_balance, bitcoin::SignedAmount::ZERO);
+		assert_eq!(database.get_movement_by_id(movement).await.unwrap().offchain_fee, Amount::ZERO);
 		let history = wallet.history().await.unwrap();
 		assert!(wallet.sync_pending_rounds().await.unwrap().is_empty());
 		assert_eq!(wallet.history().await.unwrap(), history);
@@ -1619,6 +1675,8 @@ async fn accepted_forfeit_lost_reply_never_releases_the_original_refresh_input()
 		}).await.unwrap().into_inner();
 		assert_eq!(response.status, protos::RoundParticipationStatus::RoundPartReleased as i32);
 		drop(saved);
+		let registrations = transport.registrations.load(Ordering::SeqCst);
+		let nonces = transport.nonce_requests.load(Ordering::SeqCst);
 		drop(wallet);
 		let wallet = Box::pin(reopen_refresh(&ctx, &proxy, &mnemonic, database.clone())).await;
 		assert!(database.get_round_state_by_id(state_id).await.unwrap().unwrap().state().forfeits_may_be_exposed());
@@ -1636,6 +1694,9 @@ async fn accepted_forfeit_lost_reply_never_releases_the_original_refresh_input()
 			}
 		}
 		assert!(wallet.pending_round_states().await.unwrap().is_empty());
+		assert_eq!(transport.registrations.load(Ordering::SeqCst), registrations);
+		assert_eq!(transport.nonce_requests.load(Ordering::SeqCst), nonces);
+		assert_eq!(transport.accepted_forfeits.load(Ordering::SeqCst), 1);
 		assert_eq!(wallet.get_vtxo_by_id(source.id()).await.unwrap().state, VtxoState::Spent);
 		let outputs = wallet.spendable_vtxos().await.unwrap();
 		assert!(!outputs.is_empty());
@@ -1653,6 +1714,321 @@ async fn accepted_forfeit_lost_reply_never_releases_the_original_refresh_input()
 		assert!(wallet.sync_pending_rounds().await.unwrap().is_empty());
 		assert_eq!(wallet.history().await.unwrap(), history);
 	})).await.expect("an accepted refresh must recover its replacement without unlocking its original input");
+}
+
+#[tokio::test]
+async fn pending_retention_retries_a_spent_marker_after_reopen() {
+	Box::pin(retained_claim_write_failure(false)).await;
+}
+
+#[tokio::test]
+async fn pending_retention_persists_a_new_signed_body_before_its_marker() {
+	Box::pin(retained_claim_write_failure(true)).await;
+}
+
+async fn retained_claim_write_failure(new_body: bool) {
+	tokio::time::timeout(Duration::from_secs(180), Box::pin(async {
+		let name = if new_body { "bark_sdk/retained_body_before_marker" }
+			else { "bark_sdk/retained_spent_marker_reopen" };
+		let ctx = TestContext::new(name).await;
+		let srv = ctx.captaind("server").no_vtxo_pool().cfg(|config| {
+			config.vtxo_lifetime = BlockDelta::new(24);
+			config.vtxo_exit_delta = BlockDelta::new(3);
+		}).watchmand().create().await;
+		let transport = RefreshTransport::default();
+		let proxy = srv.start_proxy_no_mailbox(transport.clone()).await;
+		let seed = bip39::Mnemonic::generate(12).unwrap();
+		let fault = RoundWriteFault::default();
+		let path = ctx.datadir.join("retained-owner.json");
+		let database = Arc::new(StorageAdaptorWrapper::new(RoundWriteGate {
+			inner: FileStorageAdaptor::open(&path).await.unwrap(), fault: fault.clone(),
+		}));
+		let wallet = Box::pin(reopen_refresh(&ctx, &proxy, &seed, database.clone())).await;
+		let address = wallet.onchain().unwrap().write().await.address().await.unwrap();
+		ctx.bitcoind().fund_addr(address, sat(300_000)).await;
+		ctx.generate_blocks(1).await;
+		wallet.sync_onchain().await.unwrap();
+		let board = wallet.board_amount(sat(100_000)).await.unwrap();
+		ctx.await_transaction(board.funding_tx.compute_txid()).await;
+		ctx.generate_blocks(BOARD_CONFIRMATIONS).await;
+		wallet.sync_pending_boards().await.unwrap();
+		let coin = wallet.get_vtxo_by_id(board.vtxos[0]).await.unwrap();
+		let signed = wallet.get_full_vtxo(coin.id()).await.unwrap();
+		wallet.validate_vtxo(&signed).await.unwrap();
+		super::fallback_adoption::await_decision(&ctx, &srv, &coin).await;
+		let (wallet, database, path) = if new_body {
+			drop(wallet);
+			let path = ctx.datadir.join("retained-import.json");
+			assert!(!path.exists());
+			let database = Arc::new(StorageAdaptorWrapper::new(RoundWriteGate {
+				inner: FileStorageAdaptor::open(&path).await.unwrap(), fault: fault.clone(),
+			}));
+			let onchain = OnchainWallet::load_or_create(Network::Regtest, seed.to_seed(""), database.clone()).await.unwrap();
+			let script = onchain.fallback_script();
+			let mut config = ctx.bark_default_cfg(&proxy, Some(ctx.bitcoind()));
+			config.daemon_manual_sync = true;
+			let wallet = Wallet::open(Network::Regtest, WalletSeed::new_from_mnemonic(Network::Regtest, &seed), config,
+				OpenWalletArgs { persister: Some(database.clone()),
+					onchain: Some(Arc::new(tokio::sync::RwLock::new(onchain))), fallback_spk: Some(script),
+					run_daemon: false, skip_recovery: true, ..Default::default() }).await.unwrap();
+			(wallet, database, path)
+		} else {
+			// An explicit ordinary-history status fault admits this real body as
+			// Spent; the actual customer allocation remains unpaid and unchanged.
+			transport.force_spent_history.store(true, Ordering::SeqCst);
+			assert!(wallet.recover_vtxos([coin.id()], None).await.unwrap().is_complete());
+			transport.force_spent_history.store(false, Ordering::SeqCst);
+			assert_eq!(wallet.get_vtxo_by_id(coin.id()).await.unwrap().state, VtxoState::Spent);
+			(wallet, database, path)
+		};
+		if new_body {
+			fault.snapshot_armed.store(true, Ordering::SeqCst);
+			assert!(wallet.import_vtxo(&signed, bark::ImportVtxoArgs::default()).await.is_err());
+			assert_eq!(fault.snapshot_hits.load(Ordering::SeqCst), 1);
+		} else {
+			fault.unlock_armed.store(true, Ordering::SeqCst);
+			assert!(wallet.trust_and_adopt_server_vtxo_status(coin.id()).await.is_err());
+			assert_eq!(fault.unlock_hits.load(Ordering::SeqCst), 1);
+		}
+		let expected = if new_body { VtxoState::Locked { holder: None } } else { VtxoState::Spent };
+		assert_eq!(wallet.get_vtxo_by_id(coin.id()).await.unwrap().state, expected);
+		assert_eq!(wallet.get_full_vtxo(coin.id()).await.unwrap().serialize(), signed.serialize());
+		assert_eq!(database.get_fallback_snapshot().await.unwrap().awaiting_settlement.contains(&coin.id()), !new_body);
+		assert!(database.get_fallback_snapshot().await.unwrap().adopted_payout_vtxos.is_empty());
+		assert_eq!(wallet.balance().await.unwrap().total(), Amount::ZERO);
+		assert!(wallet.spendable_vtxos().await.unwrap().is_empty());
+		drop(wallet);
+		drop(database);
+		fault.snapshot_armed.store(false, Ordering::SeqCst);
+		fault.unlock_armed.store(false, Ordering::SeqCst);
+		transport.reject_status_batches.store(true, Ordering::SeqCst);
+		let database = Arc::new(StorageAdaptorWrapper::new(RoundWriteGate {
+			inner: FileStorageAdaptor::open(&path).await.unwrap(), fault,
+		}));
+		let wallet = Box::pin(reopen_refresh(&ctx, &proxy, &seed, database.clone())).await;
+		wallet.sync().await;
+		assert_eq!(wallet.get_vtxo_by_id(coin.id()).await.unwrap().state, expected);
+		assert_eq!(wallet.get_full_vtxo(coin.id()).await.unwrap().serialize(), signed.serialize());
+		assert_eq!(wallet.balance().await.unwrap().total(), Amount::ZERO);
+		assert_eq!(database.get_fallback_snapshot().await.unwrap().awaiting_settlement.contains(&coin.id()), !new_body);
+		transport.reject_status_batches.store(false, Ordering::SeqCst);
+		wallet.sync().await;
+		assert_eq!(wallet.get_vtxo_by_id(coin.id()).await.unwrap().state, VtxoState::Spendable);
+		assert_eq!(wallet.get_full_vtxo(coin.id()).await.unwrap().serialize(), signed.serialize());
+		wallet.validate_vtxo(&signed).await.unwrap();
+		assert!(wallet.spendable_vtxos().await.unwrap().is_empty());
+		assert_refresh_balance(&wallet, Amount::ZERO, Amount::ZERO, Amount::ZERO, sat(100_000)).await;
+		let snapshot = database.get_fallback_snapshot().await.unwrap();
+		assert!(snapshot.awaiting_settlement.contains(&coin.id()));
+		assert!(snapshot.adopted_payout_vtxos.is_empty());
+		assert!(!wallet.history().await.unwrap().iter().any(|movement| movement.subsystem.name == "abandon.fallback_payout"));
+	})).await.expect("retained signed claims must retry through normal authenticated reconciliation");
+}
+
+#[tokio::test]
+async fn issued_refresh_completes_unsigned_history_before_unlocking_it() {
+	tokio::time::timeout(Duration::from_secs(180), Box::pin(async {
+		let ctx = TestContext::new("bark_sdk/issued_refresh_unsigned_history").await;
+		let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).cfg(|config| {
+			config.vtxo_lifetime = BlockDelta::new(48);
+			config.vtxo_exit_delta = BlockDelta::new(3);
+		}).create().await;
+		let transport = RefreshTransport::default();
+		let IssuedRefresh { wallet, proxy: _proxy, database, source, unlock_hash, .. } =
+			Box::pin(issued_refresh(&ctx, &srv, transport.clone(), RoundWriteFault::default(), false)).await;
+		let response = srv.get_public_rpc().await.round_participation_status(protos::RoundParticipationStatusRequest {
+			unlock_hash: unlock_hash.to_byte_array().to_vec(),
+		}).await.unwrap().into_inner();
+		assert_eq!(response.status, protos::RoundParticipationStatus::RoundPartIssued as i32);
+		assert_eq!(response.output_vtxos.len(), 1);
+		let unsigned = Vtxo::<Full>::deserialize(&response.output_vtxos[0]).unwrap();
+		assert!(!unsigned.has_all_witnesses());
+		transport.reject_status_batches.store(true, Ordering::SeqCst);
+		let report = wallet.recover_vtxos([unsigned.id()], None).await.unwrap();
+		assert!(!report.is_complete());
+		assert_eq!(report.failed().total_amount(), sat(100_000));
+		assert_eq!(database.get_wallet_vtxo(unsigned.id()).await.unwrap().unwrap().state, VtxoState::Locked { holder: None });
+		assert_eq!(wallet.get_full_vtxo(unsigned.id()).await.unwrap().serialize(), unsigned.serialize());
+		assert_refresh_balance(&wallet, Amount::ZERO, Amount::ZERO, sat(100_000), Amount::ZERO).await;
+		transport.reject_status_batches.store(false, Ordering::SeqCst);
+		transport.reject_nonces.store(false, Ordering::SeqCst);
+		wallet.sync_pending_rounds().await.unwrap();
+		assert!(wallet.pending_round_states().await.unwrap().is_empty());
+		assert_eq!(transport.accepted_forfeits.load(Ordering::SeqCst), 1);
+		assert_eq!(wallet.get_vtxo_by_id(source.id()).await.unwrap().state, VtxoState::Spent);
+		assert_eq!(wallet.get_vtxo_by_id(unsigned.id()).await.unwrap().state, VtxoState::Spendable);
+		let signed = wallet.get_full_vtxo(unsigned.id()).await.unwrap();
+		assert_eq!(signed.to_bare().serialize(), unsigned.to_bare().serialize());
+		assert!(signed.has_all_witnesses());
+		wallet.validate_vtxo(&signed).await.unwrap();
+		assert_refresh_balance(&wallet, sat(100_000), Amount::ZERO, Amount::ZERO, Amount::ZERO).await;
+		let stored = database.get_wallet_vtxo(unsigned.id()).await.unwrap().unwrap();
+		assert_eq!(stored.exit_tx_weight.to_wu(), signed.transactions().map(|step| step.tx.weight().to_wu()).sum::<u64>());
+	})).await.expect("normal forfeit completion must not unlock an incomplete recovery body");
+}
+
+#[derive(Clone, Copy)]
+enum ReleasedHistory {
+	None,
+	PreRoundBackup,
+	RegisteredPreRoundBackup,
+	Unanswered,
+	ForeignHolder,
+}
+
+#[tokio::test]
+async fn released_refresh_seed_recovery_completes_only_existing_material() {
+	recover_released_refresh(ReleasedHistory::None).await;
+}
+
+#[tokio::test]
+async fn released_refresh_recovery_retires_original_from_a_pre_round_backup() {
+	recover_released_refresh(ReleasedHistory::PreRoundBackup).await;
+}
+
+#[tokio::test]
+async fn registered_released_output_retires_original_from_a_pre_round_backup() {
+	recover_released_refresh(ReleasedHistory::RegisteredPreRoundBackup).await;
+}
+
+#[tokio::test]
+async fn released_refresh_seed_recovery_updates_unsigned_history() {
+	recover_released_refresh(ReleasedHistory::Unanswered).await;
+}
+
+#[tokio::test]
+async fn released_refresh_material_does_not_unlock_a_foreign_holder() {
+	recover_released_refresh(ReleasedHistory::ForeignHolder).await;
+}
+
+async fn recover_released_refresh(history: ReleasedHistory) {
+	tokio::time::timeout(Duration::from_secs(180), Box::pin(async {
+		let name = match history {
+			ReleasedHistory::None => "bark_sdk/released_refresh_seed",
+			ReleasedHistory::PreRoundBackup => "bark_sdk/released_refresh_pre_round_backup",
+			ReleasedHistory::RegisteredPreRoundBackup => "bark_sdk/released_refresh_registered_pre_round_backup",
+			ReleasedHistory::Unanswered => "bark_sdk/released_refresh_unsigned_history",
+			ReleasedHistory::ForeignHolder => "bark_sdk/released_refresh_foreign_holder",
+		};
+		let ctx = TestContext::new(name).await;
+		let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).cfg(|config| {
+			config.vtxo_lifetime = BlockDelta::new(48);
+			config.vtxo_exit_delta = BlockDelta::new(3);
+		}).create().await;
+		let transport = RefreshTransport::default();
+		let IssuedRefresh { wallet, proxy, database, pre_round_backup, mnemonic, source, state_id, unlock_hash, .. } =
+			Box::pin(issued_refresh(&ctx, &srv, transport.clone(), RoundWriteFault::default(), false)).await;
+		transport.reject_nonces.store(false, Ordering::SeqCst);
+		transport.lose_forfeit_reply.store(true, Ordering::SeqCst);
+		let mut state = wallet.lock_wait_round_state(state_id).await.unwrap().unwrap();
+		assert!(state.sync(&wallet).await.is_err());
+		assert!(state.state().forfeits_may_be_exposed());
+		drop(state);
+		assert_eq!(transport.accepted_forfeits.load(Ordering::SeqCst), 1);
+		let response = srv.get_public_rpc().await.round_participation_status(protos::RoundParticipationStatusRequest {
+			unlock_hash: unlock_hash.to_byte_array().to_vec(),
+		}).await.unwrap().into_inner();
+		assert_eq!(response.status, protos::RoundParticipationStatus::RoundPartReleased as i32);
+		assert_eq!(response.output_vtxos.len(), 1);
+		let unsigned = Vtxo::<Full>::deserialize(&response.output_vtxos[0]).unwrap();
+		assert_eq!(unsigned.amount(), sat(100_000));
+		assert!(!unsigned.has_all_witnesses());
+		let funding = ctx.bitcoind().await_transaction(unsigned.chain_anchor().txid).await;
+		unsigned.validate_unsigned(&funding).unwrap();
+		assert!(unsigned.validate(&funding).is_err());
+		let key = wallet.pubkey_keypair(&unsigned.user_pubkey()).await.unwrap().unwrap().1;
+		let status = srv.get_public_rpc().await.get_vtxo_status(protos::GetVtxoStatusRequest {
+			vtxo_id: unsigned.id().to_bytes().to_vec(),
+			attestation: ark::attestations::VtxoStatusAttestation::new(unsigned.id(), &key).serialize(),
+		}).await.unwrap().into_inner();
+		assert_eq!(status.spend_state, protos::VtxoSpendState::Spendable as i32,
+			"accepted forfeits atomically make the incomplete output Spendable, not Unclaimed");
+		if matches!(history, ReleasedHistory::RegisteredPreRoundBackup) {
+			wallet.sync_pending_rounds().await.unwrap();
+			let signed = wallet.get_full_vtxo(unsigned.id()).await.unwrap();
+			wallet.validate_vtxo(&signed).await.unwrap();
+			wallet.register_vtxo_transactions_with_server([signed]).await.unwrap();
+			let raw = srv.get_public_rpc().await.get_vtxo(protos::GetVtxoRequest {
+				vtxo_id: unsigned.id().to_bytes().to_vec(),
+			}).await.unwrap().into_inner();
+			assert!(Vtxo::<Full>::deserialize(&raw.vtxo).unwrap().has_all_witnesses());
+		}
+		drop(wallet);
+		assert_eq!(database.get_round_state_by_id(state_id).await.unwrap().is_some(),
+			!matches!(history, ReleasedHistory::RegisteredPreRoundBackup),
+			"the original wallet's checkpoint is completed only in the registered-output case");
+		let storage_path = ctx.datadir.join("fresh-seed.json");
+		assert!(!storage_path.exists());
+		if matches!(history, ReleasedHistory::PreRoundBackup | ReleasedHistory::RegisteredPreRoundBackup) {
+			tokio::fs::copy(&pre_round_backup, &storage_path).await.unwrap();
+		}
+		let fresh_db = Arc::new(StorageAdaptorWrapper::new(RoundWriteGate {
+			inner: FileStorageAdaptor::open(&storage_path).await.unwrap(), fault: RoundWriteFault::default(),
+		}));
+		let holder = VtxoLockHolder::Movement { id: MovementId::new(999) };
+		let initial_state = match history {
+			ReleasedHistory::None | ReleasedHistory::PreRoundBackup | ReleasedHistory::RegisteredPreRoundBackup => None,
+			ReleasedHistory::Unanswered => Some(VtxoState::Locked { holder: None }),
+			ReleasedHistory::ForeignHolder => Some(VtxoState::Locked { holder: Some(holder.clone()) }),
+		};
+		if let Some(initial) = &initial_state {
+			fresh_db.store_vtxos(&[(&unsigned, initial)]).await.unwrap();
+		}
+		let registrations = transport.registrations.load(Ordering::SeqCst);
+		let nonces = transport.nonce_requests.load(Ordering::SeqCst);
+		let leaves = transport.leaf_cosigns.load(Ordering::SeqCst);
+		transport.invalid_released_preimage.store(true, Ordering::SeqCst);
+		let fresh = Box::pin(reopen_refresh(&ctx, &proxy, &mnemonic, fresh_db.clone())).await;
+		let invalid = fresh.recover_vtxos([unsigned.id()], None).await.unwrap();
+		assert!(!invalid.is_complete());
+		assert_eq!(invalid.failed().total_amount(), sat(100_000));
+		assert_eq!(transport.leaf_cosigns.load(Ordering::SeqCst), leaves,
+			"an invalid released preimage is refused before any leaf signature");
+		if matches!(history, ReleasedHistory::PreRoundBackup | ReleasedHistory::RegisteredPreRoundBackup) {
+			assert!(fresh.pending_round_states().await.unwrap().is_empty());
+			assert_eq!(fresh.get_vtxo_by_id(source.id()).await.unwrap().state, VtxoState::Spendable);
+			assert_refresh_balance(&fresh, sat(100_000), Amount::ZERO, Amount::ZERO, Amount::ZERO).await;
+		} else {
+			assert!(fresh.spendable_vtxos().await.unwrap().is_empty());
+		}
+		if initial_state.is_some() {
+			assert_eq!(fresh.get_full_vtxo(unsigned.id()).await.unwrap().serialize(), unsigned.serialize());
+		}
+		transport.invalid_released_preimage.store(false, Ordering::SeqCst);
+		let recovered = fresh.recover_vtxos([unsigned.id()], None).await.unwrap();
+		assert!(recovered.is_complete());
+		let signed = fresh.get_full_vtxo(unsigned.id()).await.unwrap();
+		assert_eq!(signed.to_bare().serialize(), unsigned.to_bare().serialize());
+		assert!(signed.has_all_witnesses());
+		fresh.validate_vtxo(&signed).await.unwrap();
+		assert_eq!(transport.registrations.load(Ordering::SeqCst), registrations);
+		assert_eq!(transport.nonce_requests.load(Ordering::SeqCst), nonces);
+		assert_eq!(transport.accepted_forfeits.load(Ordering::SeqCst), 1);
+		if matches!(history, ReleasedHistory::RegisteredPreRoundBackup) {
+			assert_eq!(transport.leaf_cosigns.load(Ordering::SeqCst), leaves);
+		} else {
+			assert!(transport.leaf_cosigns.load(Ordering::SeqCst) > leaves);
+		}
+		assert!(fresh.pending_round_states().await.unwrap().is_empty());
+		assert_eq!(fresh.get_vtxo_by_id(source.id()).await.unwrap().state, VtxoState::Spent);
+		assert!(fresh.awaiting_settlement_vtxos().await.unwrap().is_empty());
+		assert!(!fresh.history().await.unwrap().iter().any(|movement| movement.subsystem.name == "abandon.fallback_payout"));
+		match history {
+			ReleasedHistory::ForeignHolder => {
+				assert_eq!(fresh.get_vtxo_by_id(unsigned.id()).await.unwrap().state,
+					VtxoState::Locked { holder: Some(holder) });
+				assert!(fresh.spendable_vtxos().await.unwrap().is_empty());
+			},
+			ReleasedHistory::None | ReleasedHistory::PreRoundBackup | ReleasedHistory::RegisteredPreRoundBackup | ReleasedHistory::Unanswered => {
+				assert_eq!(fresh.get_vtxo_by_id(unsigned.id()).await.unwrap().state, VtxoState::Spendable);
+				assert_refresh_balance(&fresh, sat(100_000), Amount::ZERO, Amount::ZERO, Amount::ZERO).await;
+				assert_eq!(fresh.spendable_vtxos().await.unwrap().iter().map(|coin| coin.amount()).sum::<Amount>(), sat(100_000));
+			},
+		}
+		let rows = fresh_db.get_all_vtxos().await.unwrap();
+		assert_eq!(rows.iter().find(|coin| coin.id() == signed.id()).unwrap().exit_tx_weight.to_wu(),
+			signed.transactions().map(|step| step.tx.weight().to_wu()).sum::<u64>());
+	})).await.expect("released seed recovery must finish without replaying accepted forfeits");
 }
 
 #[tokio::test]

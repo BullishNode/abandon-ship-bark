@@ -98,7 +98,7 @@ async fn rebuilt_current_view(ctx: &TestContext, db: &Db) -> bool {
 	let hash = chain.get_block_hash(u64::from(height.to_u32())).unwrap();
 	db.read(async |t| {
 		let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
-		Ok(super::expiry_view_is_rebuilt(t, view).await?
+		Ok(t.expiry_view_is_rebuilt(view).await?
 			&& view.captaind.height == height && view.captaind.hash == hash
 			&& view.watchmand.height == height && view.watchmand.hash == hash)
 	}).await.unwrap()

@@ -142,9 +142,8 @@ impl Wallet {
 	/// The parked delivery action resumes automatically on restart. If
 	/// delivery does not occur, the server can pay an expired receive to
 	/// the recipient's registered on-chain fallback script without this
-	/// wallet. An arbitrary `claim_destination` does not prove that the
-	/// recipient has registered a fallback destination. Callers that require
-	/// expiry fallback must ensure this registration before invoice creation.
+	/// wallet. The Ark server verifies the destination's signed owner link
+	/// and fallback registration before it creates the invoice.
 	pub async fn bolt11_invoice_for_address(
 		&self,
 		amount: Amount,

@@ -591,6 +591,7 @@ impl Builder {
 				if let Some(blinded_id) = self.mailbox_id {
 					ret.push(VtxoDelivery::ServerMailbox { blinded_id });
 				}
+
 				ret.extend(self.delivery);
 				if ret.is_empty() {
 					return Err("missing delivery mechanism".into());

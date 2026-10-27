@@ -1,8 +1,7 @@
 -- Initial signature-link schema for fresh fork stores.
 
 CREATE TABLE fallback_record (
-	id BIGSERIAL PRIMARY KEY,
-	mailbox_pk TEXT NOT NULL UNIQUE,
+	mailbox_pk TEXT PRIMARY KEY,
 	spk TEXT NOT NULL,
 	mailbox_sig TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -39,7 +38,6 @@ CREATE TABLE expiry_chain_view (
 	id SMALLINT PRIMARY KEY CHECK (id = 1),
 	generation BIGINT NOT NULL DEFAULT 0 CHECK (generation >= 0),
 	invalid BOOLEAN NOT NULL DEFAULT TRUE,
-	invalid_from BIGINT NOT NULL DEFAULT 0,
 	rebuilt_captaind_height BIGINT,
 	rebuilt_captaind_hash TEXT,
 	rebuilt_watchmand_height BIGINT,
@@ -58,7 +56,6 @@ CREATE TABLE expiry_sync_ack (
 CREATE TABLE expiry_allocation (
 	id BIGSERIAL PRIMARY KEY,
 	expiry_height INTEGER NOT NULL CHECK (expiry_height >= 0),
-	generation BIGINT NOT NULL CHECK (generation >= 0),
 	status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'conflicted')),
 	sweep_txid TEXT UNIQUE,
 	sweep_tx BYTEA,
@@ -109,7 +106,6 @@ CREATE TABLE expiry_allocation_payout (
 CREATE TABLE expiry_split_request (
 	vtxo_id TEXT PRIMARY KEY REFERENCES vtxo(vtxo_id),
 	progress_txid TEXT NOT NULL,
-	generation BIGINT NOT NULL CHECK (generation >= 0),
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

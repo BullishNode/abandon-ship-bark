@@ -16,13 +16,16 @@
 //! replayed too, since the recovery post is best-effort and a VTXO can be
 //! missing there.
 //!
-//! Recovery trusts the server's off-chain history, which can omit coins.
-//! A Spent response is checked against signed ordinary spend evidence and
-//! actual on-chain payouts before adoption. Unproven spends retain signed exit
-//! material until independently confirmed. Prefer maintaining backups;
-//! mnemonic recovery cannot recover records the server withholds.
+//! Note that recovery is a trusted process. The server can withhold VTXOs
+//! or may falsely represent spendable VTXOs as spent. Its word on the spend
+//! state is authoritative for ordinary spends. Fallback allocations remain
+//! pending until independently verified on chain. An ordinary spent VTXO is
+//! stored without validation. Spendable and fallback-pending bodies are
+//! validated before contributing to the balance. Prefer to maintain back-ups and use recovery from the
+//! mnemonic as a last resort.
 
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 
 use anyhow::Context;
 use bitcoin::Amount;
@@ -459,8 +462,8 @@ impl Wallet {
 			}
 		}
 
-		// A Spent answer needs independent evidence: an admission fence
-		// alone is not a completed payout.
+		// The server is the authority on whether a vtxo was spent elsewhere,
+		// and recovery has nothing else to go on.
 		let queries = owned.iter().map(|(vtxo, keypair)| (vtxo.id(), keypair)).collect::<Vec<_>>();
 		let states = self.fetch_vtxo_spend_states(&queries).await?;
 
@@ -477,23 +480,42 @@ impl Wallet {
 
 	/// Store owned VTXOs in the state the server reported for them.
 	///
-	/// A Spent response needs signed ordinary spend or on-chain payout evidence.
-	/// Undischarged decisions or unavailable history retain validated signed
-	/// material in quarantine; ordinary historical spends remain spent.
+	/// Ordinary spent history follows upstream trust. Validate spendable and
+	/// fallback-pending bodies before admitting positive principal; a fallback
+	/// allocation is not evidence of payment.
 	async fn store_recovered_vtxos(
 		&self,
 		report: &mut RecoveryReport,
 		vtxos: Vec<(Vtxo<Full>, anyhow::Result<ServerStatusAdoption>)>,
 	) -> anyhow::Result<()> {
+		let mut fallback_pending = Vec::new();
 		let mut spendable = Vec::new();
 		let mut spent = Vec::new();
 		let mut unclaimed = Vec::new();
 		let mut locked = Vec::new();
-		for (vtxo, adoption) in vtxos {
+		for (mut vtxo, mut adoption) in vtxos {
 			let id = vtxo.id();
+			if matches!(&adoption, Ok(ServerStatusAdoption::Spendable | ServerStatusAdoption::FallbackPending))
+				&& vtxo.unlock_hash().is_some() {
+				match self.recover_released_round_output(&vtxo).await {
+					Ok(completed) => {
+						vtxo = completed;
+						let (_, key) = self.pubkey_keypair(&vtxo.user_pubkey()).await?
+							.context("recovered round key disappeared")?;
+						adoption = self.fetch_vtxo_spend_state(id, &key).await
+							.and_then(ServerStatusAdoption::from_spend_state);
+					},
+					Err(error) => {
+						warn!("Could not complete released recovery source {id}: {error:#}");
+						report.push_failed(id, Some(vtxo.amount()));
+						continue;
+					},
+				}
+			}
 			match adoption {
 				Ok(ServerStatusAdoption::Spendable) => spendable.push(vtxo),
 				Ok(ServerStatusAdoption::Spent) => spent.push(vtxo),
+				Ok(ServerStatusAdoption::FallbackPending) => fallback_pending.push(vtxo),
 				Ok(ServerStatusAdoption::InFlight(VtxoSpendState::Unclaimed))
 					if vtxo.unlock_hash().is_some() => unclaimed.push(vtxo),
 				// Finishing the flow the VTXO is stuck in is what decides where it
@@ -513,15 +535,29 @@ impl Wallet {
 			}
 		}
 
-		// Verify the actual spend before adopting the reported state.
-		// Pending decisions retain their validated signed exit material.
+		// The spent row is what stops a later mailbox replay from storing the
+		// vtxo as spendable again. A row from an earlier, failed attempt is
+		// forced along.
 		if !spent.is_empty() {
-			let final_ids = self.adopt_reported_spent(&spent.iter().collect::<Vec<_>>()).await?;
+			self.store_vtxos(spent.iter(), &VtxoState::Spent).await?;
+			self.trust_ordinary_spends(&spent.iter().map(|v| v.id()).collect::<Vec<_>>()).await?;
 			for vtxo in &spent {
-				if final_ids.contains(&vtxo.id()) { report.push_skipped(vtxo); }
-				else { report.push_failed(vtxo.id(), Some(vtxo.amount())); }
+				debug!("Recovery vtxo {} already spent, skipping", vtxo.id());
+				report.push_skipped(vtxo);
 			}
 		}
+
+		let mut pending = Vec::new();
+		for vtxo in fallback_pending {
+			if let Err(error) = self.validate_vtxo(&vtxo).await {
+				warn!("Invalid fallback recovery source {}: {error:#}", vtxo.id());
+				report.push_failed(vtxo.id(), Some(vtxo.amount()));
+			} else {
+				report.push_recovered(&vtxo);
+				pending.push(vtxo);
+			}
+		}
+		self.retain_fallback_pending(&pending).await?;
 
 		// An unclaimed output of a delegated round participation lacks its
 		// unlock preimage, so it can't validate yet. The participation is
@@ -576,6 +612,19 @@ impl Wallet {
 		if !locked.is_empty() {
 			warn!("Could not get the status of {} recovery vtxos, keeping them locked until \
 				it is known", locked.len());
+			let _guard = self.lock_fallback_history(Duration::from_secs(30)).await?;
+			let mut snapshot = self.inner.db.get_fallback_snapshot().await?;
+			for vtxo in &locked {
+				// Missing status cannot erase a previously validated owned source
+				// or count it again beside its real signed change. New unanswered
+				// history remains locked and acquires no positive principal.
+				if !snapshot.adopted_payout_vtxos.contains(&vtxo.id())
+					&& self.inner.db.get_wallet_vtxo(vtxo.id()).await?
+						.is_some_and(|stored| stored.state == VtxoState::Spendable) {
+					snapshot.awaiting_settlement.insert(vtxo.id());
+				}
+			}
+			self.inner.db.store_fallback_snapshot(&snapshot).await?;
 			self.store_vtxos(locked.iter(), &VtxoState::Locked { holder: None }).await?;
 			for vtxo in &locked {
 				report.push_failed(vtxo.id(), Some(vtxo.amount()));

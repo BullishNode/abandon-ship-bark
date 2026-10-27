@@ -175,15 +175,15 @@ async fn oversized_fee_child() {
 		loop {
 			if db.read(async |t| {
 				let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && !t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+				Ok(view.captaind == point && view.watchmand == point && t.expiry_view_is_rebuilt(view).await?)
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("the exact Core tip must have a completed expiry reconstruction");
 	srv.watchmand().stop().await.unwrap();
 	let mut wallet = load_fee_wallet(&ctx, &srv, &db).await;
-	let child = wallet.make_signed_p2a_cpfp_with_coin_selection(&parent, MakeCpfpFees::Effective(target), &[],
-		bdk_wallet::coin_selection::LargestFirstCoinSelection).unwrap();
+	let child = wallet.make_signed_p2a_cpfp_replacing(&parent, MakeCpfpFees::Effective(target), &[],
+		bdk_wallet::coin_selection::LargestFirstCoinSelection, None).unwrap();
 	assert!(child.vsize() > 1_000, "the signed fixture must exceed Core's child limit");
 	let old_inputs = child.input.iter().filter(|input| input.previous_output.txid != parent.compute_txid())
 		.map(|input| input.previous_output).collect::<Vec<_>>();
@@ -426,9 +426,9 @@ async fn payout_reorg(depth: u32) {
 	tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
 			let valid = db.read(async |t| {
-				let invalid = t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0);
-				Ok(!invalid && t.get_highest_block(BlockTable::Captaind).await? == Some(recovery_tip)
-					&& t.get_highest_block(BlockTable::Watchmand).await? == Some(recovery_tip))
+				let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
+				Ok(view.captaind == recovery_tip && view.watchmand == recovery_tip
+					&& t.expiry_view_is_rebuilt(view).await?)
 			}).await.unwrap();
 			// A retained package may already be mined in the first replacement
 			// block; otherwise the watchman must recover it in the mempool.

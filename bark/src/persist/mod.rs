@@ -37,7 +37,7 @@ use lightning_invoice::Bolt11Invoice;
 #[cfg(feature = "onchain-bdk")]
 use bdk_wallet::ChangeSet;
 
-use ark::{Vtxo, VtxoId};
+use ark::{ProtocolEncoding, Vtxo, VtxoId};
 use ark::lightning::{PaymentHash, Preimage};
 use ark::vtxo::Full;
 
@@ -339,6 +339,16 @@ pub trait BarkPersister: Send + Sync + 'static {
 		&self,
 		vtxos: &[(&Vtxo<Full>, &VtxoState)],
 	) -> anyhow::Result<()>;
+
+	/// Replace only the witness material of an existing VTXO. The caller must
+	/// first fully validate the completed body against its actual chain anchor.
+	/// Preserve the exact bare serialization, state history, holder and recovery
+	/// registration. Return false when the row does not exist; never insert it.
+	async fn update_vtxo_witnesses(&self, vtxo: &Vtxo<Full>) -> anyhow::Result<bool> {
+		let Some(stored) = self.get_full_vtxo(vtxo.id()).await? else { return Ok(false); };
+		ensure!(stored.serialize() == vtxo.serialize(), "this persister does not support VTXO witness updates");
+		Ok(true)
+	}
 
 	/// Fetch a wallet [Vtxo] with its current state by ID.
 	///

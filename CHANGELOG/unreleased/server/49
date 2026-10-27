@@ -1,5 +1,0 @@
-- Admit Lightning payments from near-expiry sources
-  Keep the existing contract and payment checks without requiring a source to
-  outlive its HTLC. Return typed admission refusals before any payment attempt.
-  Unresolved outcomes stay held under the existing rules.
-  [#49](https://github.com/BullishNode/abandon-ship-bark/pull/49)

@@ -65,10 +65,11 @@ use crate::telemetry;
 /// Returns `None` for server-internal states (pool, forfeit, connector). A user
 /// can never prove ownership of such a vtxo, so the `get_vtxo_status` endpoint
 /// reports those as not found rather than leaking their existence.
-fn client_spend_state(spend_state: SpendState) -> Option<protos::VtxoSpendState> {
+fn client_spend_state(spend_state: SpendState, fallback_pending: bool) -> Option<protos::VtxoSpendState> {
 	match spend_state {
 		SpendState::Spendable => Some(protos::VtxoSpendState::Spendable),
 		SpendState::HtlcRecvUnclaimed => Some(protos::VtxoSpendState::HtlcRecvUnclaimed),
+		SpendState::Spent if fallback_pending => Some(protos::VtxoSpendState::FallbackPending),
 		SpendState::Spent => Some(protos::VtxoSpendState::Spent),
 		SpendState::LnSpent => Some(protos::VtxoSpendState::Spent),
 		SpendState::Unclaimed => Some(protos::VtxoSpendState::Unclaimed),
@@ -169,8 +170,12 @@ impl rpc::server::ArkService for Server {
 		let id = VtxoId::from_bytes(req.vtxo_id)?;
 		let attestation = VtxoStatusAttestation::from_bytes(&req.attestation)?;
 
-		let vtxo_state = self.db.read(async |t| t.get_server_vtxo_by_id(id).await).await
-			.to_status()?;
+		let (vtxo_state, fallback) = self.db.read(async |t| {
+			let state = t.get_server_vtxo_by_id(id).await?;
+			let keys = state.vtxo.policy().user_pubkey().map(|key| (id, key)).into_iter().collect::<Vec<_>>();
+			let fallback = t.fallback_customer_vtxos(&keys).await?;
+			Ok((state, fallback))
+		}).await.to_status()?;
 
 		let spend_state = vtxo_state.spend_state;
 		let user_vtxo = match vtxo_state.vtxo.try_into_user_vtxo() {
@@ -183,28 +188,13 @@ impl rpc::server::ArkService for Server {
 		attestation.verify(&user_vtxo)
 			.badarg("invalid VTXO status attestation")?;
 
-		let Some(spend_state) = client_spend_state(spend_state) else {
+		let Some(spend_state) = client_spend_state(spend_state, fallback.contains(&id)) else {
 			macros::not_found!([id], "VTXO not found");
 		};
 
 		Ok(tonic::Response::new(protos::GetVtxoStatusResponse {
 			spend_state: spend_state as i32,
 		}))
-	}
-
-	#[tracing::instrument(skip(self, req))]
-	async fn get_vtxo_spend_proof(
-		&self, req: tonic::Request<protos::GetVtxoStatusRequest>,
-	) -> Result<tonic::Response<protos::GetVtxoSpendProofResponse>, tonic::Status> {
-		let req = req.into_inner();
-		let id = VtxoId::from_bytes(req.vtxo_id)?;
-		let attestation = VtxoStatusAttestation::from_bytes(&req.attestation)?;
-		let vtxos = self.db.read(async |tx| {
-			let source = tx.get_user_vtxo_by_id(id).await?;
-			attestation.verify(&source.vtxo).badarg("invalid VTXO status attestation")?;
-			tx.ordinary_spend_proof(&source).await
-		}).await.to_status()?;
-		Ok(tonic::Response::new(protos::GetVtxoSpendProofResponse { vtxos }))
 	}
 
 	#[tracing::instrument(skip(self, req))]
@@ -260,8 +250,13 @@ impl rpc::server::ArkService for Server {
 			.collect::<Result<Vec<_>, tonic::Status>>()?;
 
 		let ids = queries.iter().map(|(id, _)| *id).collect::<Vec<_>>();
-		let states = self.db.read(async |t| t.get_existing_server_vtxos_by_id(&ids).await).await
-			.to_status()?;
+		let (states, fallback) = self.db.read(async |t| {
+			let states = t.get_existing_server_vtxos_by_id(&ids).await?;
+			let keys = states.iter().filter_map(|(id, state)| state.vtxo.policy().user_pubkey().map(|key| (*id, key)))
+				.collect::<Vec<_>>();
+			let fallback = t.fallback_customer_vtxos(&keys).await?;
+			Ok((states, fallback))
+		}).await.to_status()?;
 
 		// An id without a client-visible user vtxo is reported as missing,
 		// not as an error, so one bad id does not cost the client the batch.
@@ -269,7 +264,8 @@ impl rpc::server::ArkService for Server {
 		let mut by_id = HashMap::with_capacity(states.len());
 		for (id, state) in states {
 			let Ok(user_vtxo) = state.vtxo.try_into_user_vtxo() else { continue };
-			let Some(spend_state) = client_spend_state(state.spend_state) else { continue };
+			let Some(spend_state) = client_spend_state(state.spend_state,
+				fallback.contains(&id)) else { continue };
 			by_id.insert(id, (user_vtxo, spend_state));
 		}
 
@@ -347,9 +343,12 @@ impl rpc::server::ArkService for Server {
 		// from, so their status needs no attestation of its own. A VTXO in a
 		// server-internal state is left out, as GetVtxoStatus reports it as
 		// not found.
+		let keys = res.vtxos.iter().map(|v| (v.vtxo.id(), v.vtxo.user_pubkey())).collect::<Vec<_>>();
+		let fallback = self.db.read(async |t| t.fallback_customer_vtxos(&keys).await).await.to_status()?;
 		let vtxos = res.vtxos.into_iter().filter_map(|v| {
 			Some(protos::RecoveredVtxo {
-				spend_state: client_spend_state(v.spend_state)? as i32,
+				spend_state: client_spend_state(v.spend_state,
+					fallback.contains(&v.vtxo.id()))? as i32,
 				vtxo: v.vtxo.serialize(),
 				derivation_index: v.derivation_index,
 			})
@@ -1182,18 +1181,24 @@ mod test {
 	#[test]
 	fn client_spend_state_collapses_server_internal_states() {
 		// Client-relevant states map to a concrete spend state.
-		assert_eq!(client_spend_state(SpendState::Spendable), Some(protos::VtxoSpendState::Spendable));
-		assert_eq!(client_spend_state(SpendState::HtlcRecvUnclaimed), Some(protos::VtxoSpendState::HtlcRecvUnclaimed));
-		assert_eq!(client_spend_state(SpendState::Spent), Some(protos::VtxoSpendState::Spent));
-		assert_eq!(client_spend_state(SpendState::LnSpent), Some(protos::VtxoSpendState::Spent));
-		assert_eq!(client_spend_state(SpendState::Unclaimed), Some(protos::VtxoSpendState::Unclaimed));
-		assert_eq!(client_spend_state(SpendState::Unregistered), Some(protos::VtxoSpendState::Unregistered));
+		assert_eq!(client_spend_state(SpendState::Spendable, false), Some(protos::VtxoSpendState::Spendable));
+		assert_eq!(client_spend_state(SpendState::HtlcRecvUnclaimed, false), Some(protos::VtxoSpendState::HtlcRecvUnclaimed));
+		assert_eq!(client_spend_state(SpendState::Spent, false), Some(protos::VtxoSpendState::Spent));
+		assert_eq!(client_spend_state(SpendState::LnSpent, false), Some(protos::VtxoSpendState::Spent));
+		assert_eq!(client_spend_state(SpendState::Unclaimed, false), Some(protos::VtxoSpendState::Unclaimed));
+		assert_eq!(client_spend_state(SpendState::Unregistered, false), Some(protos::VtxoSpendState::Unregistered));
+
+		// A customer allocation remains pending even though admission is fenced.
+		assert_eq!(client_spend_state(SpendState::Spent, true), Some(protos::VtxoSpendState::FallbackPending));
+		assert_eq!(client_spend_state(SpendState::LnSpent, true), Some(protos::VtxoSpendState::Spent));
+		assert_eq!(client_spend_state(SpendState::Spendable, true), Some(protos::VtxoSpendState::Spendable));
+		assert_eq!(client_spend_state(SpendState::Pool, true), None);
 
 		// Server-internal states (pool, forfeit, connector) collapse to `None`
 		// so the endpoint reports them as not found.
-		assert_eq!(client_spend_state(SpendState::Pool), None);
-		assert_eq!(client_spend_state(SpendState::RoundForfeit), None);
-		assert_eq!(client_spend_state(SpendState::OffboardForfeit), None);
-		assert_eq!(client_spend_state(SpendState::OffboardConnector), None);
+		assert_eq!(client_spend_state(SpendState::Pool, false), None);
+		assert_eq!(client_spend_state(SpendState::RoundForfeit, false), None);
+		assert_eq!(client_spend_state(SpendState::OffboardForfeit, false), None);
+		assert_eq!(client_spend_state(SpendState::OffboardConnector, false), None);
 	}
 }

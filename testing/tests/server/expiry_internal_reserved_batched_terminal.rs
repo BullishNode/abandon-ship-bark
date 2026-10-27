@@ -31,7 +31,7 @@ async fn wait_batched_parent(
 			let finished=db.read(async |t| {
 				let Some(view)=t.expiry_rebuild_token().await? else {return Ok(false);};
 				if view.captaind.height!=height || view.watchmand.height!=height || view.captaind.hash!=hash || view.watchmand.hash!=hash
-					|| !super::expiry_view_is_rebuilt(t, view).await? {return Ok(false);}
+					|| !t.expiry_view_is_rebuilt(view).await? {return Ok(false);}
 				let row=t.query_one("SELECT status,sweep_txid,sweep_tx,confirmed_hash FROM expiry_allocation WHERE id=$1",&[&allocation]).await?;
 				assert_eq!(row.get::<_,Option<&str>>("sweep_txid"),Some(parent.compute_txid().to_string().as_str()));
 				assert_eq!(row.get::<_,Option<&[u8]>>("sweep_tx"),Some(serialize(parent).as_slice()));
@@ -385,7 +385,7 @@ async fn reserved_batched_terminal(reorg:bool) {
 			let ready=db.read(async |t| {
 				let Some(view)=t.expiry_rebuild_token().await? else {return Ok(false);};
 				if view.captaind.height!=height || view.watchmand.height!=height || view.captaind.hash!=tip_hash || view.watchmand.hash!=tip_hash
-					|| !super::expiry_view_is_rebuilt(t, view).await? {return Ok(false);}
+					|| !t.expiry_view_is_rebuilt(view).await? {return Ok(false);}
 				// Every reservation holding a user-claimed original conflicts.
 				let mut all=true;
 				for source in &paid_ids {

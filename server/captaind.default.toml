@@ -10,8 +10,6 @@ data_dir = "./bark-server"
 
 # The bitcoin network this server runs on
 network = "regtest"
-# Bound new Lightning timelocks. This is not a wall-clock settlement guarantee.
-max_htlc_expiry_delta = 288
 
 # The lifetime of VTXOs in blocks
 vtxo_lifetime = 4320
@@ -337,9 +335,9 @@ fallback_fee_rate_fast = "25sat/vb"
 fallback_fee_rate_regular = "10sat/vb"
 # Fallback feerate for slow confirmation (6 block target)
 fallback_fee_rate_slow = "4sat/vb"
-# Optional ceiling for later fee estimate updates.
-# Initial fallback feerates can exceed this value.
-# This does not cap the total miner subsidy or replacement fee.
+# Optional ceiling for fetched fee rates. Any rate returned by the backend
+# above this value is clamped down to it. Useful to guard against mempool
+# spikes or a misconfigured esplora/bitcoind returning absurd rates.
 # Accepts the same units as the fallback rates (e.g. "1000sat/vb").
 # Unset by default (no ceiling).
 # max_fee_rate = "1000sat/vb"
@@ -354,8 +352,7 @@ fallback_fee_rate_slow = "4sat/vb"
 public_address = "127.0.0.1:3535"
 # Listen address for the private admin gRPC API.
 # Unauthenticated by design and as privileged as shell access to this host.
-# The operator must keep it on loopback and block public access in the firewall.
-# Do not expose it through a reverse proxy. Comment it out to not start it.
+# Keep it on loopback, or comment it out to not start it.
 admin_address = "127.0.0.1:3536"
 # Listen address for the integration manager gRPC API
 integration_address = "127.0.0.1:3537"

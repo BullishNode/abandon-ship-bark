@@ -231,36 +231,18 @@ async fn offboard_race(offboard_wins: bool, finality: bool) {
 			let confirmed = rpc.custom_get_raw_transaction_info(parent.compute_txid(), None).unwrap().unwrap();
 			rpc.invalidate_block(&confirmed.blockhash.unwrap()).unwrap();
 			wallet.chain().invalidate_caches().await;
-			let protection = wallet.protect_expiring_vtxos().await.unwrap();
-			assert_eq!(protection.exits_started, vec![id], "an undone payout must restore actual signed-path protection");
-			let protected = wallet_db.get_wallet_vtxo(id).await.unwrap().unwrap();
-			assert!(matches!(&protected.state, VtxoState::Locked { holder: Some(VtxoLockHolder::Movement { .. }) }));
-			wallet.sync_fallback_payouts().await.unwrap(); // Core remains available while Ark is stopped.
-			wallet.protect_expiring_vtxos().await.unwrap();
-			assert_eq!(wallet_db.get_wallet_vtxo(id).await.unwrap().unwrap().state, protected.state,
-				"chain reconciliation must not steal the actual protective exit holder");
+			wallet.sync_fallback_payouts().await.unwrap();
+			assert!(wallet.exit_mgr().get_exit_vtxo(id).await.is_none(), "fallback reconciliation must retain upstream exit scheduling");
 			assert_eq!(wallet.get_full_vtxo(id).await.unwrap(), signed);
+			let pending = wallet.balance().await.unwrap();
+			assert_eq!(pending.awaiting_settlement, coin.amount());
+			assert_eq!(pending.total(), coin.amount());
 			let history = wallet.history().await.unwrap();
 			let cancelled = history.iter().find(|entry| entry.id == movement).unwrap();
 			assert_eq!(cancelled.status, bark::movement::MovementStatus::Canceled);
 			assert_eq!(cancelled.effective_balance, bitcoin::SignedAmount::ZERO);
 			assert_eq!(cancelled.offchain_fee, bitcoin::Amount::ZERO);
-			let exit_holder = match &protected.state {
-				VtxoState::Locked { holder: Some(VtxoLockHolder::Movement { id }) } => *id,
-				other => panic!("protective exit lost its real movement holder: {other:?}"),
-			};
-			let exits = history.iter().filter(|entry| entry.input_vtxos.contains(&id)
-				&& entry.metadata.get("protective_exit") == Some(&serde_json::Value::Bool(true)))
-				.collect::<Vec<_>>();
-			assert_eq!(exits.len(), 1, "one real protective exit must reserve the principal");
-			assert_eq!(exits[0].id, exit_holder);
-			assert_eq!(exits[0].subsystem.name, "bark.exit");
-			assert_eq!(exits[0].input_vtxos, vec![id]);
-			assert_eq!(exits[0].effective_balance.to_sat(), -i64::try_from(coin.amount().to_sat()).unwrap());
-			assert_eq!(exits[0].offchain_fee, bitcoin::Amount::ZERO);
-			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(),
-				native_balance + exits[0].effective_balance.to_sat(),
-				"only the genuine protective exit may debit the original board credit");
+			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), native_balance);
 		}
 
 	}
@@ -352,6 +334,6 @@ async fn expiry_uninitiated_grant_can_revoke_after_backing_expiry() {
 }
 
 #[tokio::test]
-async fn expiry_prepared_offboard_reconciles_real_payout_then_reprotects_after_reorg() {
+async fn expiry_prepared_offboard_retains_principal_when_payout_reorgs() {
 	offboard_race(false, true).await;
 }

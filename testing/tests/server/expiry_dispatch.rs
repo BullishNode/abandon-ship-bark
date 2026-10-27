@@ -187,7 +187,6 @@ async fn lightning_rejection_refunds_only_its_source() {
 		let mut payer = lightning.internal.grpc_client().await;
 		let info = payer.getinfo(cln_rpc::GetinfoRequest {}).await.unwrap().into_inner();
 		assert_eq!(info.network, "regtest");
-		assert_eq!(info.version, "v26.06.6-abandon6");
 		let db = server::database::Db::connect(&srv.config().postgres).await.unwrap();
 		let node = db.read(async |t| Ok(t.query_one("SELECT id,pubkey FROM lightning_node WHERE pubkey=$1",
 			&[&info.id]).await?)).await.unwrap();

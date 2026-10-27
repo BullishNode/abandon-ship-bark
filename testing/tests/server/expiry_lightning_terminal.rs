@@ -586,7 +586,7 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool, past_s
 			loop {
 				if db.read(async |t| {
 					let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
-					Ok(view.captaind == point && view.watchmand == point && !t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+					Ok(view.captaind == point && view.watchmand == point && t.expiry_view_is_rebuilt(view).await?)
 				}).await.unwrap() { break; }
 				tokio::time::sleep(Duration::from_millis(50)).await;
 			}
@@ -599,8 +599,7 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool, past_s
 			&[&source.to_string()]).await?)).await.unwrap().is_none(), "sender refund must wait for six grant confirmations");
 		ctx.generate_blocks(1).await;
 	}
-	// The send contract now requires a backing coin that outlives its HTLC.
-	// Reach the original 100-block reaction window without shortening that backing.
+	// Reach the original 100-block reaction window for this long-lived source.
 	if !past_source_expiry {
 		let height = ctx.bitcoind().get_block_count().await as u32;
 		let target = source_expiry.saturating_sub(BlockDelta::new(40)).to_u32();
@@ -834,7 +833,7 @@ async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
 			if let Some(target) = maturity {
 				let mature_view = db.read(async |t| {
 					let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
-					Ok(view.captaind.height>=target && view.watchmand.height>=target && !t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+					Ok(view.captaind.height>=target && view.watchmand.height>=target && t.expiry_view_is_rebuilt(view).await?)
 				}).await.unwrap();
 				if !mature_view { continue; }
 			}

@@ -392,21 +392,9 @@ pub trait WalletExt: BorrowMut<Wallet> {
 		tx: &Transaction,
 		fees: MakeCpfpFees,
 	) -> Result<Transaction, CpfpInternalError> {
-		self.make_signed_p2a_cpfp_with_coin_selection(
-			tx, fees, &[], DefaultCoinSelectionAlgorithm::default(),
+		self.make_signed_p2a_cpfp_replacing(
+			tx, fees, &[], DefaultCoinSelectionAlgorithm::default(), None,
 		)
-	}
-
-	/// Fund a fee child with the caller's selection algorithm, keeping the
-	/// same confirmed-input, exclusion and non-dust change requirements.
-	fn make_signed_p2a_cpfp_with_coin_selection<Cs: CoinSelectionAlgorithm + Clone>(
-		&mut self,
-		tx: &Transaction,
-		fees: MakeCpfpFees,
-		excluded: &[OutPoint],
-		coin_selection: Cs,
-	) -> Result<Transaction, CpfpInternalError> {
-		self.make_signed_p2a_cpfp_replacing(tx, fees, excluded, coin_selection, None)
 	}
 
 	/// Reuse the confirmed funding of a verified orphaned child when BDK still
@@ -549,8 +537,8 @@ mod test {
 		assert_eq!(parent.weight().to_wu(), 668, "fixed script-spend parent geometry");
 		let original = serialize(&parent);
 		let target = FeeRate::from_sat_per_vb(8).unwrap();
-		let fragmented = wallet.make_signed_p2a_cpfp_with_coin_selection(
-			&parent, MakeCpfpFees::Effective(target), &[], LargestFirstCoinSelection,
+		let fragmented = wallet.make_signed_p2a_cpfp_replacing(
+			&parent, MakeCpfpFees::Effective(target), &[], LargestFirstCoinSelection, None,
 		).unwrap();
 		assert!(fragmented.vsize() > 1_000, "fragmented signed child must exceed the package limit");
 		wallet.mark_output_keys_unused(&fragmented);
@@ -558,8 +546,8 @@ mod test {
 		let large = receive_output_in_latest_block(&mut wallet, Amount::from_sat(100_000));
 		let excluded = receive_output_in_latest_block(&mut wallet, Amount::from_sat(200_000));
 		let unconfirmed = receive_output(&mut wallet, Amount::from_sat(1_000_000), ReceiveTo::Mempool(1));
-		let child = wallet.make_signed_p2a_cpfp_with_coin_selection(
-			&parent, MakeCpfpFees::Effective(target), &[excluded], LargestFirstCoinSelection,
+		let child = wallet.make_signed_p2a_cpfp_replacing(
+			&parent, MakeCpfpFees::Effective(target), &[excluded], LargestFirstCoinSelection, None,
 		).unwrap();
 		assert!(child.vsize() <= 1_000);
 		assert_eq!(child.input.len(), 2);
@@ -582,8 +570,8 @@ mod test {
 			output: vec![crate::fee::fee_anchor()],
 		};
 		let original = serialize(&parent);
-		let child = wallet.make_signed_p2a_cpfp_with_coin_selection(&parent,
-			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &[excluded], DefaultCoinSelectionAlgorithm::default()).unwrap();
+		let child = wallet.make_signed_p2a_cpfp_replacing(&parent,
+			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &[excluded], DefaultCoinSelectionAlgorithm::default(), None).unwrap();
 		assert_eq!(serialize(&parent), original);
 		assert!(!child.input.iter().any(|input| input.previous_output == excluded));
 		assert!(child.input.iter().any(|input| input.previous_output.txid == parent.compute_txid()));
@@ -595,12 +583,12 @@ mod test {
 
 		// The unconfirmed coin remains available in the wallet, but cannot
 		// replace the confirmed funding excluded by the caller.
-		assert!(matches!(wallet.make_signed_p2a_cpfp_with_coin_selection(&parent,
-			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &confirmed, DefaultCoinSelectionAlgorithm::default()),
+		assert!(matches!(wallet.make_signed_p2a_cpfp_replacing(&parent,
+			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &confirmed, DefaultCoinSelectionAlgorithm::default(), None),
 			Err(CpfpInternalError::InsufficientConfirmedFunds(_))));
 		let all = wallet.list_unspent().map(|utxo| utxo.outpoint).collect::<Vec<_>>();
-		assert!(wallet.make_signed_p2a_cpfp_with_coin_selection(&parent,
-			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &all, DefaultCoinSelectionAlgorithm::default()).is_err());
+		assert!(wallet.make_signed_p2a_cpfp_replacing(&parent,
+			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &all, DefaultCoinSelectionAlgorithm::default(), None).is_err());
 
 		let child = wallet.make_signed_p2a_cpfp(&parent,
 			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap())).unwrap();

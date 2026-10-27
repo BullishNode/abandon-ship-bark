@@ -800,7 +800,9 @@ impl<'t> Tx<'t> {
 	) -> anyhow::Result<Option<ark::mailbox::MailboxIdentifier>> {
 		let stmt = self.prepare(
 			"SELECT sender_mailbox_id FROM lightning_payment_attempt
-			WHERE id = $1"
+			WHERE id = $1
+			ORDER BY created_at DESC
+			LIMIT 1"
 		).await?;
 		let row = self.query_opt(&stmt, &[&attempt_id]).await?;
 

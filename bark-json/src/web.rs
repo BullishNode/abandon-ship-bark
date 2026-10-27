@@ -831,9 +831,6 @@ impl PendingRoundInfo {
 	/// Like [PendingRoundInfo::new], but without contacting the server: the
 	/// status is derived from the stored state alone.
 	pub fn from_state<G>(state: &bark::persist::models::StoredRoundState<G>) -> Self {
-		if let Some(status) = state.state().onchain_recovery_status() {
-			return Self::new(state, Ok(status));
-		}
 		let status = match state.state().flow_kind() {
 			RoundFlowKind::AwaitingConfirmations => {
 				bark::round::RoundStatus::Unconfirmed {

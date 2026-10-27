@@ -14,7 +14,6 @@ mod board;
 mod exit;
 mod fallback;
 mod fallback_protection;
-mod fallback_act_by;
 mod fallback_adoption;
 mod fallback_external;
 mod import;
@@ -26,9 +25,3 @@ mod payment_request;
 mod recovery;
 mod round;
 mod vtxo_lock;
-
-mod protection_isolation;
-
-mod ordinary_exit_atomic;
-mod offline_exit_recovery;
-mod payout_reorg_recovery;

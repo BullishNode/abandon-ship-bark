@@ -13,5 +13,4 @@ mod lightning;
 mod lock_helpers;
 mod pid_lock;
 mod tip_watcher;
-mod vtxo;
 mod wallet_ext;
